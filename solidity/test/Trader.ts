@@ -610,7 +610,7 @@ describe("Trader", function () {
     });
 
     it("应该能够解密多个用户的公开余额", async function () {
-      // Alice 注册并揭示余额
+      // Alice 已经在 beforeEach 中注册，直接揭示余额
       let encryptedCash = await traderContract.connect(signers.alice).getEncryptedCash();
       let clearCash = await fhevm.userDecryptEuint(
         FhevmType.euint32,
@@ -622,6 +622,9 @@ describe("Trader", function () {
       await tx.wait();
 
       // Bob 注册并揭示余额
+      tx = await traderContract.connect(signers.bob).register();
+      await tx.wait();
+      
       encryptedCash = await traderContract.connect(signers.bob).getEncryptedCash();
       clearCash = await fhevm.userDecryptEuint(
         FhevmType.euint32,
@@ -645,7 +648,6 @@ describe("Trader", function () {
         FhevmType.euint32,
         bobPublicBalance[0]
       );
-
       // 验证两个用户都有相同的初始余额
       expect(aliceDecryptedUsd).to.eq(10000);
       expect(bobDecryptedUsd).to.eq(10000);
@@ -704,6 +706,103 @@ describe("Trader", function () {
       console.log(`交易前余额: 10000 USD`);
       console.log(`交易后余额: ${decryptedUsdBalance} USD`);
       console.log(`使用的保证金: ${margin} USD`);
+    });
+
+    it("应该允许未注册用户查看其他人揭示的余额", async function () {
+      // Alice 已经在 beforeEach 中注册，直接揭示余额
+      let encryptedCash = await traderContract.connect(signers.alice).getEncryptedCash();
+      let clearCash = await fhevm.userDecryptEuint(
+        FhevmType.euint32,
+        encryptedCash,
+        traderContractAddress,
+        signers.alice,
+      );
+      let tx = await traderContract.connect(signers.alice).revealBalance(clearCash, 0);
+      await tx.wait();
+
+      // Charlie（未注册用户）尝试查看 Alice 的公开余额
+      const alicePublicBalance = await revealStorage.getPublicRevealedBalance(signers.alice.address);
+      const aliceDecryptedUsd = await fhevm.publicDecryptEuint(
+        FhevmType.euint32,
+        alicePublicBalance[0]
+      );
+
+      // 验证 Charlie 可以成功查看 Alice 的余额
+      expect(aliceDecryptedUsd).to.eq(10000);
+
+      console.log(`Charlie（未注册）查看 Alice 的余额: ${aliceDecryptedUsd} USD`);
+    });
+
+    it("应该能够检查用户是否已揭示余额", async function () {
+      // 初始状态，Alice 未揭示余额
+      expect(await revealStorage.hasUserRevealedBalance(signers.alice.address)).to.be.false;
+
+      // Alice 已经在 beforeEach 中注册，直接揭示余额
+      let encryptedCash = await traderContract.connect(signers.alice).getEncryptedCash();
+      let clearCash = await fhevm.userDecryptEuint(
+        FhevmType.euint32,
+        encryptedCash,
+        traderContractAddress,
+        signers.alice,
+      );
+      let tx = await traderContract.connect(signers.alice).revealBalance(clearCash, 0);
+      await tx.wait();
+
+      // 现在 Alice 已揭示余额
+      expect(await revealStorage.hasUserRevealedBalance(signers.alice.address)).to.be.true;
+
+      // 获取揭示时间戳
+      const revealTimestamp = await revealStorage.getRevealTimestamp(signers.alice.address);
+      expect(revealTimestamp).to.be.gt(0);
+
+      console.log(`Alice 揭示余额的时间戳: ${revealTimestamp}`);
+    });
+
+    it("应该能够批量查看多个用户的公开余额", async function () {
+      // Alice 已经在 beforeEach 中注册，直接揭示余额
+      let encryptedCash = await traderContract.connect(signers.alice).getEncryptedCash();
+      let clearCash = await fhevm.userDecryptEuint(
+        FhevmType.euint32,
+        encryptedCash,
+        traderContractAddress,
+        signers.alice,
+      );
+      let tx = await traderContract.connect(signers.alice).revealBalance(clearCash, 0);
+      await tx.wait();
+
+      // Bob 注册并揭示余额
+      tx = await traderContract.connect(signers.bob).register();
+      await tx.wait();
+      
+      encryptedCash = await traderContract.connect(signers.bob).getEncryptedCash();
+      clearCash = await fhevm.userDecryptEuint(
+        FhevmType.euint32,
+        encryptedCash,
+        traderContractAddress,
+        signers.bob,
+      );
+      tx = await traderContract.connect(signers.bob).revealBalance(clearCash, 0);
+      await tx.wait();
+
+      // Charlie（未注册用户）批量查看所有用户的公开余额
+      const aliceBalance = await revealStorage.getPublicRevealedBalance(signers.alice.address);
+      const bobBalance = await revealStorage.getPublicRevealedBalance(signers.bob.address);
+
+      const aliceDecryptedUsd = await fhevm.publicDecryptEuint(
+        FhevmType.euint32,
+        aliceBalance[0]
+      );
+      const bobDecryptedUsd = await fhevm.publicDecryptEuint(
+        FhevmType.euint32,
+        bobBalance[0]
+      );
+
+      // 验证所有用户都有相同的初始余额
+      expect(aliceDecryptedUsd).to.eq(10000);
+      expect(bobDecryptedUsd).to.eq(10000);
+
+      console.log(`Charlie 查看 Alice 的余额: ${aliceDecryptedUsd} USD`);
+      console.log(`Charlie 查看 Bob 的余额: ${bobDecryptedUsd} USD`);
     });
   });
 }); 
