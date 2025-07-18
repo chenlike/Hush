@@ -1,5 +1,6 @@
 # fhevm
 fhevmTemp
+tmp
 
 # directories
 .coverage_artifacts
@@ -12,14 +13,14 @@ coverage
 dist
 node_modules
 types
-deployments
-tmp
 
 # files
 *.env
 *.log
 .DS_Store
 .pnp.*
+bun.lockb
 coverage.json
+package-lock.json
 pnpm-lock.yaml
 yarn.lock

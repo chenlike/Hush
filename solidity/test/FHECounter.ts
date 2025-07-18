@@ -1,8 +1,8 @@
-import { FHECounter, FHECounter__factory } from "../typechain-types";
-import { FhevmType } from "@fhevm/hardhat-plugin";
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
-import { expect } from "chai";
 import { ethers, fhevm } from "hardhat";
+import { FHECounter, FHECounter__factory } from "../types";
+import { expect } from "chai";
+import { FhevmType } from "@fhevm/hardhat-plugin";
 
 type Signers = {
   deployer: HardhatEthersSigner;
@@ -29,6 +29,10 @@ describe("FHECounter", function () {
   });
 
   beforeEach(async () => {
+    // Check whether the tests are running against an FHEVM mock environment
+    if (!fhevm.isMock) {
+      throw new Error(`This hardhat test suite cannot run on Sepolia Testnet`);
+    }
     ({ fheCounterContract, fheCounterContractAddress } = await deployFixture());
   });
 
