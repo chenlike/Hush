@@ -1,145 +1,257 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {FHE, euint32, externalEuint32} from "@fhevm/solidity/lib/FHE.sol";
+import {FHE, euint32, externalEuint32, ebool, externalEbool} from "@fhevm/solidity/lib/FHE.sol";
 import {SepoliaConfig} from "./fhevm-config/ZamaConfig.sol";
+import {RevealStorage} from "./RevealStorage.sol";
 
-// PriceOracle 接口
+// 价格预言机接口
 interface IPriceOracle {
     function getBtcPrice() external view returns (uint32);
-    function getBtcPriceUSD() external view returns (uint32);
-    function getEncryptedBtcPrice() external view returns (euint32);
     function isPriceStale() external view returns (bool);
 }
 
 contract Trader is SepoliaConfig {
-    // 价格预言机合约地址
-    address public priceOracle;
-    
-    constructor(address _priceOracle) {
+    address public priceOracle; // 价格预言机地址
+    RevealStorage public storageContract; // 公布密文结果的存储合约
+    uint32 private constant INITIAL_CASH = 10_000; // 初始虚拟资金
+
+    event PositionClosed(address indexed owner, uint256 indexed positionId, uint32 currentPrice);
+    event BalanceRevealed(address indexed owner, uint32 usdBalance, uint32 btcBalance, uint256 timestamp);
+
+    constructor(address _priceOracle, address _storageAddr) {
         priceOracle = _priceOracle;
+        storageContract = RevealStorage(_storageAddr);
     }
 
+    // 用户余额结构体，存储密文
     struct Balance {
-        euint32 encryptedCash;  // 加密的现金余额（单位 USD）
-        euint32 encryptedBTC;   // 加密的 BTC 持仓（单位为小数点后6位的btc数量）
+        euint32 cash;
     }
 
-    mapping(address => bool) public isRegistered;
-    mapping(address => Balance) private balances;
+    // 持仓结构体
+    struct Position {
+        address owner;
+        euint32 margin;
+        uint32 entryPrice;
+        ebool isLong;
+        bool isOpen;
+    }
 
-    /// @notice 玩家注册并初始化加密资产状态
+    // 余额公开记录结构体
+    struct RevealRecord {
+        uint32 usdBalance;
+        uint32 btcBalance;
+        uint256 timestamp;
+        bool exists;
+        ebool usdVerified;
+        ebool btcVerified;
+        bool usdVerifiedDecrypted;
+        bool btcVerifiedDecrypted;
+        bool isDecryptionPending;
+        uint256 latestRequestId;
+    }
+
+    mapping(address => bool) public isRegistered; // 是否注册
+    mapping(address => Balance) private balances; // 密文余额
+    uint256 private positionCounter; // 持仓编号递增器
+    mapping(uint256 => Position) private positions; // 持仓映射
+    mapping(address => uint256[]) private userPositions; // 用户持仓 ID 集合
+    mapping(address => RevealRecord) private revealRecords; // 用户公开记录
+
+    modifier validPosition(uint256 positionId) {
+        require(positions[positionId].owner == msg.sender, "Not position owner");
+        require(positions[positionId].isOpen, "Position not open");
+        _;
+    }
+
+    // 注册账户并初始化密文资金
     function register() external {
-        require(!isRegistered[msg.sender], "User already registered");
-
-        // 初始化现金和BTC余额
-        euint32 initialCash = FHE.asEuint32(10_000);  // 加密初始现金 10000 USD
-        euint32 initialBTC = FHE.asEuint32(0);        // BTC 初始为 0
-
-        balances[msg.sender] = Balance({
-            encryptedCash: initialCash,
-            encryptedBTC: initialBTC
-        });
-
-        FHE.allowThis(initialCash);
-        FHE.allowThis(initialBTC);
-
-        FHE.allow(initialCash, msg.sender);
-        FHE.allow(initialBTC, msg.sender);
-
+        require(!isRegistered[msg.sender], "Already registered");
+        euint32 init = FHE.asEuint32(INITIAL_CASH);
+        balances[msg.sender] = Balance({ cash: init });
+        FHE.allowThis(init);
+        FHE.allow(init, msg.sender);
         isRegistered[msg.sender] = true;
     }
 
-    /// @notice 获取当前加密现金余额（只能用户自己调用）
+    // 查看当前用户的密文资金
     function getEncryptedCash() external view returns (euint32) {
         require(isRegistered[msg.sender], "Not registered");
-        return balances[msg.sender].encryptedCash;
+        return balances[msg.sender].cash;
     }
 
-    /// @notice 获取当前加密BTC余额（只能用户自己调用）
-    function getEncryptedBTC() external view returns (euint32) {
+    // 获取当前用户持仓编号列表
+    function getPositionIds() external view returns (uint256[] memory) {
+        return userPositions[msg.sender];
+    }
+
+    // 获取单个持仓信息（含密文）
+    function getPosition(uint256 pid) external view returns (
+        euint32 margin,
+        uint32 entryPrice,
+        ebool isLong,
+        bool isOpen
+    ) {
+        Position storage p = positions[pid];
+        require(p.owner == msg.sender, "Not position owner");
+        return (p.margin, p.entryPrice, p.isLong, p.isOpen);
+    }
+
+    // 开多/空单（需提供 FHE 外部密文及证明）
+    function openPosition(
+        externalEuint32 inputMargin,
+        bytes calldata proofMargin,
+        externalEbool inputDir,
+        bytes calldata proofDir
+    ) external returns (uint256) {
         require(isRegistered[msg.sender], "Not registered");
-        return balances[msg.sender].encryptedBTC;
+
+        // 解密输入密文
+        euint32 margin = FHE.fromExternal(inputMargin, proofMargin);
+        ebool isLong = FHE.fromExternal(inputDir, proofDir);
+
+        // 判断是否有足够余额开仓，若不足则使用 0
+        euint32 cur = balances[msg.sender].cash;
+        euint32 useM = FHE.select(FHE.gt(cur, margin), margin, FHE.asEuint32(0));
+        balances[msg.sender].cash = FHE.sub(cur, useM);
+        FHE.allowThis(balances[msg.sender].cash);
+        FHE.allow(balances[msg.sender].cash, msg.sender);
+
+        // 记录持仓信息
+        positionCounter++;
+        uint256 pid = positionCounter;
+        positions[pid] = Position({
+            owner: msg.sender,
+            margin: useM,
+            entryPrice: IPriceOracle(priceOracle).getBtcPrice(),
+            isLong: isLong,
+            isOpen: true
+        });
+
+        // 授权密文给合约用于后续运算
+        FHE.allowThis(useM);
+        FHE.allow(useM, address(this));
+        FHE.allowThis(isLong);
+        FHE.allow(isLong, address(this));
+
+        userPositions[msg.sender].push(pid);
+        return pid;
     }
 
+    // 平仓操作，自动判定盈亏
+    function closePosition(uint256 positionId) external validPosition(positionId) {
+        Position storage p = positions[positionId];
+        uint32 currentPrice = IPriceOracle(priceOracle).getBtcPrice();
 
+        euint32 entryPriceEnc = FHE.asEuint32(p.entryPrice);
+        euint32 currentPriceEnc = FHE.asEuint32(currentPrice);
 
-    /// @notice 使用现金购买BTC
-    /// @param inputEuint32 加密的购买金额（USD）
-    /// @param inputProof 加密输入的证明
-    function buy(externalEuint32 inputEuint32, bytes calldata inputProof) external {
+        ebool priceUp = FHE.gt(currentPriceEnc, entryPriceEnc);
+        ebool isProfit = FHE.select(p.isLong, priceUp, FHE.not(priceUp));
+
+        euint32 currentCash = balances[msg.sender].cash;
+        euint32 finalBalance = FHE.select(isProfit,
+            FHE.add(currentCash, p.margin),
+            currentCash
+        );
+
+        balances[msg.sender].cash = finalBalance;
+        FHE.allowThis(balances[msg.sender].cash);
+        FHE.allow(balances[msg.sender].cash, msg.sender);
+
+        p.isOpen = false;
+        emit PositionClosed(msg.sender, positionId, currentPrice);
+    }
+
+    // 用户提交明文余额进行公开验证
+    function revealBalance(uint32 usdBalance, uint32 btcBalance) external {
         require(isRegistered[msg.sender], "Not registered");
-        
-        // 将外部加密输入转换为内部加密类型
-        euint32 buyAmount = FHE.fromExternal(inputEuint32, inputProof);
-        
-        // 获取用户当前余额
-        euint32 currentCash = balances[msg.sender].encryptedCash;
-        euint32 currentBTC = balances[msg.sender].encryptedBTC;
-        
-        // 检查用户是否有足够的现金
-        // 注意：在FHE中，我们需要使用加密比较
-        // 这里我们假设用户有足够的现金（在实际应用中需要更复杂的检查）
-        
-        // 从预言机获取BTC价格
-        IPriceOracle oracle = IPriceOracle(priceOracle);
-        uint32 btcPriceUSD = oracle.getBtcPrice();
-        
-        // 计算可以购买的BTC数量
-        // 由于FHE不支持直接除法，我们使用乘法来计算
-        // 假设1 USD可以买 0.00002 BTC (1/50000)
-        euint32 btcPerDollar = FHE.asEuint32(2); // 0.00002 BTC = 2 * 10^-6 BTC
-        euint32 btcToBuy = FHE.mul(buyAmount, btcPerDollar);
-        
-        // 更新用户余额
-        balances[msg.sender].encryptedCash = FHE.sub(currentCash, buyAmount);
-        balances[msg.sender].encryptedBTC = FHE.add(currentBTC, btcToBuy);
-        
-        // 授权新的余额给用户
-        FHE.allowThis(balances[msg.sender].encryptedCash);
-        FHE.allowThis(balances[msg.sender].encryptedBTC);
-        FHE.allow(balances[msg.sender].encryptedCash, msg.sender);
-        FHE.allow(balances[msg.sender].encryptedBTC, msg.sender);
+        require(!revealRecords[msg.sender].exists, "Already revealed");
+
+        euint32 currentCash = balances[msg.sender].cash;
+
+        euint32 claimedUsd = FHE.asEuint32(usdBalance);
+        euint32 claimedBtc = FHE.asEuint32(btcBalance);
+
+        // 设置为可公开解密的密文
+        FHE.makePubliclyDecryptable(claimedUsd);
+        FHE.makePubliclyDecryptable(claimedBtc);
+
+        // 授予任意人访问权限（address(0)表示公开）
+        FHE.allow(claimedUsd, address(0));
+        FHE.allow(claimedBtc, address(0));
+
+        // 存储到外部 RevealStorage 合约
+        storageContract.storePublicBalance(msg.sender, claimedUsd, claimedBtc);
+
+        // 内部验证 claimed 值是否正确
+        ebool usdEqual = FHE.eq(currentCash, claimedUsd);
+        ebool btcEqual = FHE.eq(FHE.asEuint32(0), claimedBtc);
+
+        // 授权密文用于进一步使用
+        FHE.allowThis(usdEqual);
+        FHE.allowThis(btcEqual);
+
+        // 存储验证记录
+        revealRecords[msg.sender] = RevealRecord({
+            usdBalance: usdBalance,
+            btcBalance: btcBalance,
+            timestamp: block.timestamp,
+            exists: true,
+            usdVerified: usdEqual,
+            btcVerified: btcEqual,
+            usdVerifiedDecrypted: false,
+            btcVerifiedDecrypted: false,
+            isDecryptionPending: false,
+            latestRequestId: 0
+        });
+
+        emit BalanceRevealed(msg.sender, usdBalance, btcBalance, block.timestamp);
     }
 
-    /// @notice 卖出BTC换取现金
-    /// @param inputEuint32 加密的卖出BTC数量
-    /// @param inputProof 加密输入的证明
-    function sell(externalEuint32 inputEuint32, bytes calldata inputProof) external {
-        require(isRegistered[msg.sender], "Not registered");
-        
-        // 将外部加密输入转换为内部加密类型
-        euint32 sellAmount = FHE.fromExternal(inputEuint32, inputProof);
-        
-        // 获取用户当前余额
-        euint32 currentCash = balances[msg.sender].encryptedCash;
-        euint32 currentBTC = balances[msg.sender].encryptedBTC;
-        
-        // 检查用户是否有足够的BTC
-        // 注意：在FHE中，我们需要使用加密比较
-        // 这里我们假设用户有足够的BTC（在实际应用中需要更复杂的检查）
-        
-        // 从预言机获取BTC价格
-        IPriceOracle oracle = IPriceOracle(priceOracle);
-        uint32 btcPriceUSD = oracle.getBtcPrice();
-        
-        // 计算可以获得的现金数量
-        // 使用预言机提供的价格
-        euint32 btcPrice = FHE.asEuint32(btcPriceUSD);
-        euint32 cashToReceive = FHE.mul(sellAmount, btcPrice);
-        
-        // 更新用户余额
-        balances[msg.sender].encryptedCash = FHE.add(currentCash, cashToReceive);
-        balances[msg.sender].encryptedBTC = FHE.sub(currentBTC, sellAmount);
-        
-        // 授权新的余额给用户
-        FHE.allowThis(balances[msg.sender].encryptedCash);
-        FHE.allowThis(balances[msg.sender].encryptedBTC);
-        FHE.allow(balances[msg.sender].encryptedCash, msg.sender);
-        FHE.allow(balances[msg.sender].encryptedBTC, msg.sender);
+    // 获取用户公开记录结构
+    function getRevealRecord(address user) external view returns (
+        uint32 usdBalance,
+        uint32 btcBalance,
+        uint256 timestamp,
+        bool exists,
+        ebool usdVerified,
+        ebool btcVerified,
+        bool usdVerifiedDecrypted,
+        bool btcVerifiedDecrypted,
+        bool isDecryptionPending
+    ) {
+        RevealRecord storage record = revealRecords[user];
+        return (
+            record.usdBalance,
+            record.btcBalance,
+            record.timestamp,
+            record.exists,
+            record.usdVerified,
+            record.btcVerified,
+            record.usdVerifiedDecrypted,
+            record.btcVerifiedDecrypted,
+            record.isDecryptionPending
+        );
     }
 
+    // 查询用户是否已经公开余额
+    function hasRevealed(address user) external view returns (bool) {
+        return revealRecords[user].exists;
+    }
 
+    // 公开查看其他用户的揭示余额（任何人都可以调用，不需要注册）
+    function getPublicRevealedBalance(address user) external view returns (euint32, euint32, uint256) {
+        require(revealRecords[user].exists, "User has not revealed balance");
+        return storageContract.getPublicBalance(user);
+    }
 
-    
+    // 获取所有已揭示余额的用户列表（简化版本，实际应用中可能需要更复杂的实现）
+    function getRevealedUsers() external view returns (address[] memory) {
+        // 注意：这个函数在实际应用中可能需要更复杂的实现
+        // 因为 Solidity 没有内置的方法来遍历 mapping
+        // 这里返回空数组作为示例
+        return new address[](0);
+    }
 }

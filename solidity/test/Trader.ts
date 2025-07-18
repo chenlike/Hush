@@ -1,6 +1,6 @@
 import { HardhatEthersSigner } from "@nomicfoundation/hardhat-ethers/signers";
 import { ethers, fhevm } from "hardhat";
-import { Trader, Trader__factory } from "../types";
+import { Trader, Trader__factory, RevealStorage, RevealStorage__factory } from "../types";
 import { expect } from "chai";
 import { FhevmType } from "@fhevm/hardhat-plugin";
 
@@ -17,12 +17,24 @@ async function deployFixture() {
   const priceOracle = await oracleFactory.deploy();
   const priceOracleAddress = await priceOracle.getAddress();
 
-  // 然后部署Trader合约，传入预言机地址
+  // 部署RevealStorage合约
+  const storageFactory = (await ethers.getContractFactory("RevealStorage")) as RevealStorage__factory;
+  const revealStorage = await storageFactory.deploy();
+  const revealStorageAddress = await revealStorage.getAddress();
+
+  // 然后部署Trader合约，传入预言机地址和存储合约地址
   const factory = (await ethers.getContractFactory("Trader")) as Trader__factory;
-  const traderContract = (await factory.deploy(priceOracleAddress)) as Trader;
+  const traderContract = (await factory.deploy(priceOracleAddress, revealStorageAddress)) as Trader;
   const traderContractAddress = await traderContract.getAddress();
 
-  return { traderContract, traderContractAddress, priceOracle, priceOracleAddress };
+  return { 
+    traderContract, 
+    traderContractAddress, 
+    priceOracle, 
+    priceOracleAddress,
+    revealStorage,
+    revealStorageAddress
+  };
 }
 
 describe("Trader", function () {
@@ -31,6 +43,8 @@ describe("Trader", function () {
   let traderContractAddress: string;
   let priceOracle: any;
   let priceOracleAddress: string;
+  let revealStorage: RevealStorage;
+  let revealStorageAddress: string;
 
   before(async function () {
     const ethSigners: HardhatEthersSigner[] = await ethers.getSigners();
@@ -47,275 +61,649 @@ describe("Trader", function () {
     if (!fhevm.isMock) {
       throw new Error(`This hardhat test suite cannot run on Sepolia Testnet`);
     }
-    ({ traderContract, traderContractAddress, priceOracle, priceOracleAddress } = await deployFixture());
+    ({ 
+      traderContract, 
+      traderContractAddress, 
+      priceOracle, 
+      priceOracleAddress,
+      revealStorage,
+      revealStorageAddress
+    } = await deployFixture());
   });
 
-  it("should allow user to register", async function () {
-    // 检查用户初始状态
-    expect(await traderContract.isRegistered(signers.alice.address)).to.be.false;
+  describe("用户注册", function () {
+    it("应该允许用户注册", async function () {
+      // 检查用户初始状态
+      expect(await traderContract.isRegistered(signers.alice.address)).to.be.false;
 
-    // 用户注册
-    const tx = await traderContract.connect(signers.alice).register();
-    await tx.wait();
+      // 用户注册
+      const tx = await traderContract.connect(signers.alice).register();
+      await tx.wait();
 
-    // 验证注册状态
-    expect(await traderContract.isRegistered(signers.alice.address)).to.be.true;
+      // 验证注册状态
+      expect(await traderContract.isRegistered(signers.alice.address)).to.be.true;
+    });
+
+    it("不应该允许用户重复注册", async function () {
+      // 第一次注册
+      let tx = await traderContract.connect(signers.alice).register();
+      await tx.wait();
+
+      // 尝试第二次注册，应该失败
+      await expect(
+        traderContract.connect(signers.alice).register()
+      ).to.be.revertedWith("Already registered");
+    });
+
+    it("应该允许多个用户独立注册", async function () {
+      // Alice 注册
+      let tx = await traderContract.connect(signers.alice).register();
+      await tx.wait();
+
+      // Bob 注册
+      tx = await traderContract.connect(signers.bob).register();
+      await tx.wait();
+
+      // Charlie 注册
+      tx = await traderContract.connect(signers.charlie).register();
+      await tx.wait();
+
+      // 验证所有用户都已注册
+      expect(await traderContract.isRegistered(signers.alice.address)).to.be.true;
+      expect(await traderContract.isRegistered(signers.bob.address)).to.be.true;
+      expect(await traderContract.isRegistered(signers.charlie.address)).to.be.true;
+    });
   });
 
-  it("should not allow user to register twice", async function () {
-    // 第一次注册
-    let tx = await traderContract.connect(signers.alice).register();
-    await tx.wait();
+  describe("余额管理", function () {
+    it("应该正确解密初始现金余额", async function () {
+      // 用户注册
+      const tx = await traderContract.connect(signers.alice).register();
+      await tx.wait();
 
-    // 尝试第二次注册，应该失败
-    await expect(
-      traderContract.connect(signers.alice).register()
-    ).to.be.revertedWith("User already registered");
+      // 获取加密现金余额
+      const encryptedCash = await traderContract.connect(signers.alice).getEncryptedCash();
+      
+      // 解密现金余额
+      const clearCash = await fhevm.userDecryptEuint(
+        FhevmType.euint32,
+        encryptedCash,
+        traderContractAddress,
+        signers.alice,
+      );
+
+      // 验证初始现金余额为 10000 USD
+      expect(clearCash).to.eq(10000);
+    });
+
+    it("应该为不同用户维护独立的余额", async function () {
+      // Alice 注册
+      let tx = await traderContract.connect(signers.alice).register();
+      await tx.wait();
+
+      // Bob 注册
+      tx = await traderContract.connect(signers.bob).register();
+      await tx.wait();
+
+      // 获取两个用户的加密现金余额
+      const aliceEncryptedCash = await traderContract.connect(signers.alice).getEncryptedCash();
+      const bobEncryptedCash = await traderContract.connect(signers.bob).getEncryptedCash();
+
+      // 解密余额
+      const aliceClearCash = await fhevm.userDecryptEuint(
+        FhevmType.euint32,
+        aliceEncryptedCash,
+        traderContractAddress,
+        signers.alice,
+      );
+
+      const bobClearCash = await fhevm.userDecryptEuint(
+        FhevmType.euint32,
+        bobEncryptedCash,
+        traderContractAddress,
+        signers.bob,
+      );
+
+      // 验证两个用户都有相同的初始余额（10000 USD）
+      expect(aliceClearCash).to.eq(10000);
+      expect(bobClearCash).to.eq(10000);
+    });
+
+    it("不应该允许未注册用户获取加密余额", async function () {
+      // 未注册用户尝试获取余额，应该失败
+      await expect(
+        traderContract.connect(signers.bob).getEncryptedCash()
+      ).to.be.revertedWith("Not registered");
+    });
   });
 
-  it("should initialize encrypted balances after registration", async function () {
-    // 用户注册
-    const tx = await traderContract.connect(signers.alice).register();
-    await tx.wait();
+  describe("持仓管理", function () {
+    beforeEach(async function () {
+      // 注册用户
+      const tx = await traderContract.connect(signers.alice).register();
+      await tx.wait();
+    });
 
-    // 获取加密余额
-    const encryptedCash = await traderContract.connect(signers.alice).getEncryptedCash();
-    const encryptedBTC = await traderContract.connect(signers.alice).getEncryptedBTC();
+    it("应该能够开多头仓位", async function () {
+      // 加密保证金和方向
+      const margin = 1000;
+      const isLong = true;
+      
+      const encryptedMargin = await fhevm
+        .createEncryptedInput(traderContractAddress, signers.alice.address)
+        .add32(margin)
+        .encrypt();
 
-    // 验证加密余额不为零（表示已初始化）
-    expect(encryptedCash).to.not.eq(ethers.ZeroHash);
-    expect(encryptedBTC).to.not.eq(ethers.ZeroHash);
+      const encryptedDirection = await fhevm
+        .createEncryptedInput(traderContractAddress, signers.alice.address)
+        .addBool(isLong)
+        .encrypt();
+
+      // 开仓
+      const tx = await traderContract.connect(signers.alice).openPosition(
+        encryptedMargin.handles[0],
+        encryptedMargin.inputProof,
+        encryptedDirection.handles[0],
+        encryptedDirection.inputProof
+      );
+      await tx.wait();
+
+      // 验证持仓ID
+      const positionIds = await traderContract.connect(signers.alice).getPositionIds();
+      expect(positionIds.length).to.eq(1);
+      expect(positionIds[0]).to.eq(1); // 第一个持仓ID应该是1
+    });
+
+    it("应该能够开空头仓位", async function () {
+      // 加密保证金和方向
+      const margin = 1000;
+      const isLong = false;
+      
+      const encryptedMargin = await fhevm
+        .createEncryptedInput(traderContractAddress, signers.alice.address)
+        .add32(margin)
+        .encrypt();
+
+      const encryptedDirection = await fhevm
+        .createEncryptedInput(traderContractAddress, signers.alice.address)
+        .addBool(isLong)
+        .encrypt();
+
+      // 开仓
+      const tx = await traderContract.connect(signers.alice).openPosition(
+        encryptedMargin.handles[0],
+        encryptedMargin.inputProof,
+        encryptedDirection.handles[0],
+        encryptedDirection.inputProof
+      );
+      await tx.wait();
+
+      // 验证持仓ID
+      const positionIds = await traderContract.connect(signers.alice).getPositionIds();
+      expect(positionIds.length).to.eq(1);
+    });
+
+    it("应该能够查看持仓详情", async function () {
+      // 开仓
+      const margin = 1000;
+      const isLong = true;
+      
+      const encryptedMargin = await fhevm
+        .createEncryptedInput(traderContractAddress, signers.alice.address)
+        .add32(margin)
+        .encrypt();
+
+      const encryptedDirection = await fhevm
+        .createEncryptedInput(traderContractAddress, signers.alice.address)
+        .addBool(isLong)
+        .encrypt();
+
+      // 开仓
+      const tx = await traderContract.connect(signers.alice).openPosition(
+        encryptedMargin.handles[0],
+        encryptedMargin.inputProof,
+        encryptedDirection.handles[0],
+        encryptedDirection.inputProof
+      );
+      await tx.wait();
+
+      // 获取持仓详情
+      const position = await traderContract.connect(signers.alice).getPosition(1);
+      
+      // 验证持仓信息
+      expect(position.isOpen).to.be.true;
+      expect(position.entryPrice).to.be.gt(0); // 开仓价格应该大于0
+      
+      // 注意：持仓中的密文数据（margin和isLong）在合约内部使用，
+      // 用户无法直接解密，这是FHE的安全特性
+      // 我们只验证持仓的基本信息
+    });
+
+    it("不应该允许未注册用户开仓", async function () {
+      const margin = 1000;
+      const isLong = true;
+      
+      const encryptedMargin = await fhevm
+        .createEncryptedInput(traderContractAddress, signers.bob.address)
+        .add32(margin)
+        .encrypt();
+
+      const encryptedDirection = await fhevm
+        .createEncryptedInput(traderContractAddress, signers.bob.address)
+        .addBool(isLong)
+        .encrypt();
+
+      // 未注册用户尝试开仓，应该失败
+      await expect(
+        traderContract.connect(signers.bob).openPosition(
+          encryptedMargin.handles[0],
+          encryptedMargin.inputProof,
+          encryptedDirection.handles[0],
+          encryptedDirection.inputProof
+        )
+      ).to.be.revertedWith("Not registered");
+    });
   });
 
-  it("should not allow unregistered user to get encrypted balances", async function () {
-    // 未注册用户尝试获取余额，应该失败
-    await expect(
-      traderContract.connect(signers.bob).getEncryptedCash()
-    ).to.be.revertedWith("Not registered");
+  describe("平仓功能", function () {
+    beforeEach(async function () {
+      // 注册用户
+      const tx = await traderContract.connect(signers.alice).register();
+      await tx.wait();
+    });
 
-    await expect(
-      traderContract.connect(signers.bob).getEncryptedBTC()
-    ).to.be.revertedWith("Not registered");
+    it("应该能够平仓多头盈利仓位", async function () {
+      // 开多头仓位
+      const margin = 1000;
+      const isLong = true;
+      
+      const encryptedMargin = await fhevm
+        .createEncryptedInput(traderContractAddress, signers.alice.address)
+        .add32(margin)
+        .encrypt();
+
+      const encryptedDirection = await fhevm
+        .createEncryptedInput(traderContractAddress, signers.alice.address)
+        .addBool(isLong)
+        .encrypt();
+
+      // 开仓
+      let tx = await traderContract.connect(signers.alice).openPosition(
+        encryptedMargin.handles[0],
+        encryptedMargin.inputProof,
+        encryptedDirection.handles[0],
+        encryptedDirection.inputProof
+      );
+      await tx.wait();
+
+      // 设置价格上升（多头盈利）
+      await priceOracle.updatePrice(50000); // 假设入场价格是40000，现在涨到50000
+
+      // 平仓
+      tx = await traderContract.connect(signers.alice).closePosition(1);
+      await tx.wait();
+
+      // 验证持仓已关闭
+      const position = await traderContract.connect(signers.alice).getPosition(1);
+      expect(position.isOpen).to.be.false;
+    });
+
+    it("应该能够平仓空头盈利仓位", async function () {
+      // 开空头仓位
+      const margin = 1000;
+      const isLong = false;
+      
+      const encryptedMargin = await fhevm
+        .createEncryptedInput(traderContractAddress, signers.alice.address)
+        .add32(margin)
+        .encrypt();
+
+      const encryptedDirection = await fhevm
+        .createEncryptedInput(traderContractAddress, signers.alice.address)
+        .addBool(isLong)
+        .encrypt();
+
+      // 开仓
+      let tx = await traderContract.connect(signers.alice).openPosition(
+        encryptedMargin.handles[0],
+        encryptedMargin.inputProof,
+        encryptedDirection.handles[0],
+        encryptedDirection.inputProof
+      );
+      await tx.wait();
+
+      // 设置价格下降（空头盈利）
+      await priceOracle.updatePrice(30000); // 假设入场价格是40000，现在跌到30000
+
+      // 平仓
+      tx = await traderContract.connect(signers.alice).closePosition(1);
+      await tx.wait();
+
+      // 验证持仓已关闭
+      const position = await traderContract.connect(signers.alice).getPosition(1);
+      expect(position.isOpen).to.be.false;
+    });
+
+    it("不应该允许非持仓所有者平仓", async function () {
+      // Alice 开仓
+      const margin = 1000;
+      const isLong = true;
+      
+      const encryptedMargin = await fhevm
+        .createEncryptedInput(traderContractAddress, signers.alice.address)
+        .add32(margin)
+        .encrypt();
+
+      const encryptedDirection = await fhevm
+        .createEncryptedInput(traderContractAddress, signers.alice.address)
+        .addBool(isLong)
+        .encrypt();
+
+      // Alice 开仓
+      let tx = await traderContract.connect(signers.alice).openPosition(
+        encryptedMargin.handles[0],
+        encryptedMargin.inputProof,
+        encryptedDirection.handles[0],
+        encryptedDirection.inputProof
+      );
+      await tx.wait();
+
+      // Bob 尝试平仓Alice的持仓，应该失败
+      await expect(
+        traderContract.connect(signers.bob).closePosition(1)
+      ).to.be.revertedWith("Not position owner");
+    });
+
+    it("不应该允许平仓已关闭的持仓", async function () {
+      // 开仓
+      const margin = 1000;
+      const isLong = true;
+      
+      const encryptedMargin = await fhevm
+        .createEncryptedInput(traderContractAddress, signers.alice.address)
+        .add32(margin)
+        .encrypt();
+
+      const encryptedDirection = await fhevm
+        .createEncryptedInput(traderContractAddress, signers.alice.address)
+        .addBool(isLong)
+        .encrypt();
+
+      // 开仓
+      let tx = await traderContract.connect(signers.alice).openPosition(
+        encryptedMargin.handles[0],
+        encryptedMargin.inputProof,
+        encryptedDirection.handles[0],
+        encryptedDirection.inputProof
+      );
+      await tx.wait();
+
+      // 第一次平仓
+      tx = await traderContract.connect(signers.alice).closePosition(1);
+      await tx.wait();
+
+      // 尝试再次平仓，应该失败
+      await expect(
+        traderContract.connect(signers.alice).closePosition(1)
+      ).to.be.revertedWith("Position not open");
+    });
   });
 
-  it("should allow multiple users to register independently", async function () {
-    // Alice 注册
-    let tx = await traderContract.connect(signers.alice).register();
-    await tx.wait();
+  describe("余额揭示功能", function () {
+    beforeEach(async function () {
+      // 注册用户
+      const tx = await traderContract.connect(signers.alice).register();
+      await tx.wait();
+    });
 
-    // Bob 注册
-    tx = await traderContract.connect(signers.bob).register();
-    await tx.wait();
+    it("应该能够揭示余额", async function () {
+      // 获取当前加密余额
+      const encryptedCash = await traderContract.connect(signers.alice).getEncryptedCash();
+      const clearCash = await fhevm.userDecryptEuint(
+        FhevmType.euint32,
+        encryptedCash,
+        traderContractAddress,
+        signers.alice,
+      );
 
-    // Charlie 注册
-    tx = await traderContract.connect(signers.charlie).register();
-    await tx.wait();
+      // 揭示余额
+      const tx = await traderContract.connect(signers.alice).revealBalance(clearCash, 0);
+      await tx.wait();
 
-    // 验证所有用户都已注册
-    expect(await traderContract.isRegistered(signers.alice.address)).to.be.true;
-    expect(await traderContract.isRegistered(signers.bob.address)).to.be.true;
-    expect(await traderContract.isRegistered(signers.charlie.address)).to.be.true;
+      // 验证揭示记录
+      const record = await traderContract.connect(signers.alice).getRevealRecord(signers.alice.address);
+      expect(record.exists).to.be.true;
+      expect(record.usdBalance).to.eq(clearCash);
+      expect(record.btcBalance).to.eq(0);
+    });
+
+    it("不应该允许重复揭示余额", async function () {
+      // 获取当前加密余额
+      const encryptedCash = await traderContract.connect(signers.alice).getEncryptedCash();
+      const clearCash = await fhevm.userDecryptEuint(
+        FhevmType.euint32,
+        encryptedCash,
+        traderContractAddress,
+        signers.alice,
+      );
+
+      // 第一次揭示
+      let tx = await traderContract.connect(signers.alice).revealBalance(clearCash, 0);
+      await tx.wait();
+
+      // 尝试第二次揭示，应该失败
+      await expect(
+        traderContract.connect(signers.alice).revealBalance(clearCash, 0)
+      ).to.be.revertedWith("Already revealed");
+    });
+
+    it("不应该允许未注册用户揭示余额", async function () {
+      // 未注册用户尝试揭示余额，应该失败
+      await expect(
+        traderContract.connect(signers.bob).revealBalance(10000, 0)
+      ).to.be.revertedWith("Not registered");
+    });
+
+    it("应该能够检查用户是否已揭示余额", async function () {
+      // 初始状态应该为false
+      expect(await traderContract.hasRevealed(signers.alice.address)).to.be.false;
+
+      // 获取当前加密余额
+      const encryptedCash = await traderContract.connect(signers.alice).getEncryptedCash();
+      const clearCash = await fhevm.userDecryptEuint(
+        FhevmType.euint32,
+        encryptedCash,
+        traderContractAddress,
+        signers.alice,
+      );
+
+      // 揭示余额
+      const tx = await traderContract.connect(signers.alice).revealBalance(clearCash, 0);
+      await tx.wait();
+
+      // 现在应该为true
+      expect(await traderContract.hasRevealed(signers.alice.address)).to.be.true;
+    });
+
+    it("应该能够从RevealStorage合约获取公开余额", async function () {
+      // 获取当前加密余额
+      const encryptedCash = await traderContract.connect(signers.alice).getEncryptedCash();
+      const clearCash = await fhevm.userDecryptEuint(
+        FhevmType.euint32,
+        encryptedCash,
+        traderContractAddress,
+        signers.alice,
+      );
+
+      // 揭示余额
+      const tx = await traderContract.connect(signers.alice).revealBalance(clearCash, 0);
+      await tx.wait();
+
+      // 从RevealStorage合约获取公开余额
+      const publicBalance = await revealStorage.getPublicBalance(signers.alice.address);
+      
+      // 验证时间戳
+      expect(publicBalance[2]).to.be.gt(0); // 时间戳应该大于0
+      
+      // 注意：由于FHE的权限管理复杂性，我们只验证存储功能
+      // 密文解密需要正确的权限设置，这在测试环境中比较复杂
+    });
   });
 
-  it("should decrypt initial cash balance correctly", async function () {
-    // 用户注册
-    const tx = await traderContract.connect(signers.alice).register();
-    await tx.wait();
+  describe("价格预言机集成", function () {
+    it("应该能够获取BTC价格", async function () {
+      const price = await priceOracle.getBtcPrice();
+      expect(price).to.be.gt(0);
+    });
 
-    // 获取加密现金余额
-    const encryptedCash = await traderContract.connect(signers.alice).getEncryptedCash();
-    
-    // 解密现金余额
-    const clearCash = await fhevm.userDecryptEuint(
-      FhevmType.euint32,
-      encryptedCash,
-      traderContractAddress,
-      signers.alice,
-    );
-
-    // 验证初始现金余额为 10000 USD
-    expect(clearCash).to.eq(10000);
+    it("应该能够检查价格是否过期", async function () {
+      const isStale = await priceOracle.isPriceStale();
+      expect(typeof isStale).to.eq("boolean");
+    });
   });
 
-  it("should decrypt initial BTC balance correctly", async function () {
-    // 用户注册
-    const tx = await traderContract.connect(signers.alice).register();
-    await tx.wait();
+  describe("公开解密功能", function () {
+    beforeEach(async function () {
+      // 注册用户
+      const tx = await traderContract.connect(signers.alice).register();
+      await tx.wait();
+    });
 
-    // 获取加密BTC余额
-    const encryptedBTC = await traderContract.connect(signers.alice).getEncryptedBTC();
-    
-    // 解密BTC余额
-    const clearBTC = await fhevm.userDecryptEuint(
-      FhevmType.euint32,
-      encryptedBTC,
-      traderContractAddress,
-      signers.alice,
-    );
+    it("应该能够使用 publicDecryptEuint 解密公开的余额", async function () {
+      // 获取当前加密余额
+      const encryptedCash = await traderContract.connect(signers.alice).getEncryptedCash();
+      const clearCash = await fhevm.userDecryptEuint(
+        FhevmType.euint32,
+        encryptedCash,
+        traderContractAddress,
+        signers.alice,
+      );
 
-    // 验证初始BTC余额为 0
-    expect(clearBTC).to.eq(0);
-  });
+      // 揭示余额 - 这会调用 FHE.makePubliclyDecryptable()
+      const tx = await traderContract.connect(signers.alice).revealBalance(clearCash, 0);
+      await tx.wait();
 
-  it("should maintain separate balances for different users", async function () {
-    // Alice 注册
-    let tx = await traderContract.connect(signers.alice).register();
-    await tx.wait();
+      // 从 RevealStorage 合约获取公开的密文余额
+      const publicBalance = await revealStorage.getPublicBalance(signers.alice.address);
+      const encryptedUsdBalance = publicBalance[0]; // euint32 usd
+      const encryptedBtcBalance = publicBalance[1]; // euint32 btc
 
-    // Bob 注册
-    tx = await traderContract.connect(signers.bob).register();
-    await tx.wait();
+      // 使用 publicDecryptEuint 解密公开的 USD 余额
+      const decryptedUsdBalance = await fhevm.publicDecryptEuint(
+        FhevmType.euint32,
+        encryptedUsdBalance
+      );
 
-    // 获取两个用户的加密现金余额
-    const aliceEncryptedCash = await traderContract.connect(signers.alice).getEncryptedCash();
-    const bobEncryptedCash = await traderContract.connect(signers.bob).getEncryptedCash();
+      // 使用 publicDecryptEuint 解密公开的 BTC 余额
+      const decryptedBtcBalance = await fhevm.publicDecryptEuint(
+        FhevmType.euint32,
+        encryptedBtcBalance
+      );
 
-    // 解密余额
-    const aliceClearCash = await fhevm.userDecryptEuint(
-      FhevmType.euint32,
-      aliceEncryptedCash,
-      traderContractAddress,
-      signers.alice,
-    );
+      // 验证解密结果
+      expect(decryptedUsdBalance).to.eq(clearCash);
+      expect(decryptedBtcBalance).to.eq(0);
 
-    const bobClearCash = await fhevm.userDecryptEuint(
-      FhevmType.euint32,
-      bobEncryptedCash,
-      traderContractAddress,
-      signers.bob,
-    );
+      console.log(`原始余额: ${clearCash} USD`);
+      console.log(`解密后的 USD 余额: ${decryptedUsdBalance} USD`);
+      console.log(`解密后的 BTC 余额: ${decryptedBtcBalance} BTC`);
+    });
 
-    // 验证两个用户都有相同的初始余额（10000 USD）
-    expect(aliceClearCash).to.eq(10000);
-    expect(bobClearCash).to.eq(10000);
-  });
+    it("应该能够解密多个用户的公开余额", async function () {
+      // Alice 注册并揭示余额
+      let encryptedCash = await traderContract.connect(signers.alice).getEncryptedCash();
+      let clearCash = await fhevm.userDecryptEuint(
+        FhevmType.euint32,
+        encryptedCash,
+        traderContractAddress,
+        signers.alice,
+      );
+      let tx = await traderContract.connect(signers.alice).revealBalance(clearCash, 0);
+      await tx.wait();
 
-  it("should allow user to buy BTC with cash", async function () {
-    // 用户注册
-    const tx = await traderContract.connect(signers.alice).register();
-    await tx.wait();
+      // Bob 注册并揭示余额
+      encryptedCash = await traderContract.connect(signers.bob).getEncryptedCash();
+      clearCash = await fhevm.userDecryptEuint(
+        FhevmType.euint32,
+        encryptedCash,
+        traderContractAddress,
+        signers.bob,
+      );
+      tx = await traderContract.connect(signers.bob).revealBalance(clearCash, 0);
+      await tx.wait();
 
-    // 加密购买金额 1000 USD
-    const buyAmount = 1000;
-    const encryptedBuyAmount = await fhevm
-      .createEncryptedInput(traderContractAddress, signers.alice.address)
-      .add32(buyAmount)
-      .encrypt();
+      // 获取并解密 Alice 的公开余额
+      const alicePublicBalance = await revealStorage.getPublicBalance(signers.alice.address);
+      const aliceDecryptedUsd = await fhevm.publicDecryptEuint(
+        FhevmType.euint32,
+        alicePublicBalance[0]
+      );
 
-    // 执行购买操作
-    const buyTx = await traderContract
-      .connect(signers.alice)
-      .buy(encryptedBuyAmount.handles[0], encryptedBuyAmount.inputProof);
-    await buyTx.wait();
+      // 获取并解密 Bob 的公开余额
+      const bobPublicBalance = await revealStorage.getPublicBalance(signers.bob.address);
+      const bobDecryptedUsd = await fhevm.publicDecryptEuint(
+        FhevmType.euint32,
+        bobPublicBalance[0]
+      );
 
-    // 获取更新后的余额
-    const encryptedCashAfter = await traderContract.connect(signers.alice).getEncryptedCash();
-    const encryptedBTCAfter = await traderContract.connect(signers.alice).getEncryptedBTC();
+      // 验证两个用户都有相同的初始余额
+      expect(aliceDecryptedUsd).to.eq(10000);
+      expect(bobDecryptedUsd).to.eq(10000);
 
-    // 解密余额
-    const clearCashAfter = await fhevm.userDecryptEuint(
-      FhevmType.euint32,
-      encryptedCashAfter,
-      traderContractAddress,
-      signers.alice,
-    );
+      console.log(`Alice 解密后的余额: ${aliceDecryptedUsd} USD`);
+      console.log(`Bob 解密后的余额: ${bobDecryptedUsd} USD`);
+    });
 
-    const clearBTCAfter = await fhevm.userDecryptEuint(
-      FhevmType.euint32,
-      encryptedBTCAfter,
-      traderContractAddress,
-      signers.alice,
-    );
+    it("应该能够处理交易后的余额变化", async function () {
+      // 开仓操作
+      const margin = 1000;
+      const isLong = true;
+      
+      const encryptedMargin = await fhevm
+        .createEncryptedInput(traderContractAddress, signers.alice.address)
+        .add32(margin)
+        .encrypt();
 
-    // 验证现金余额减少了 1000 USD
-    expect(clearCashAfter).to.eq(10000 - buyAmount);
-    
-    // 验证BTC余额增加了 (1000 * 2) = 2000 (0.002 BTC)
-    expect(clearBTCAfter).to.eq(2000);
-  });
+      const encryptedDirection = await fhevm
+        .createEncryptedInput(traderContractAddress, signers.alice.address)
+        .addBool(isLong)
+        .encrypt();
 
-  it("should allow user to sell BTC for cash", async function () {
-    // 用户注册
-    const tx = await traderContract.connect(signers.alice).register();
-    await tx.wait();
+      // 开仓
+      let tx = await traderContract.connect(signers.alice).openPosition(
+        encryptedMargin.handles[0],
+        encryptedMargin.inputProof,
+        encryptedDirection.handles[0],
+        encryptedDirection.inputProof
+      );
+      await tx.wait();
 
-    // 先购买一些BTC
-    const buyAmount = 1000;
-    const encryptedBuyAmount = await fhevm
-      .createEncryptedInput(traderContractAddress, signers.alice.address)
-      .add32(buyAmount)
-      .encrypt();
+      // 获取交易后的余额
+      const encryptedCashAfterTrade = await traderContract.connect(signers.alice).getEncryptedCash();
+      const clearCashAfterTrade = await fhevm.userDecryptEuint(
+        FhevmType.euint32,
+        encryptedCashAfterTrade,
+        traderContractAddress,
+        signers.alice,
+      );
 
-    let buyTx = await traderContract
-      .connect(signers.alice)
-      .buy(encryptedBuyAmount.handles[0], encryptedBuyAmount.inputProof);
-    await buyTx.wait();
+      // 揭示交易后的余额
+      tx = await traderContract.connect(signers.alice).revealBalance(clearCashAfterTrade, 0);
+      await tx.wait();
 
-    // 现在卖出一些BTC
-    const sellAmount = 1000; // 卖出 1000 单位的BTC (0.001 BTC)
-    const encryptedSellAmount = await fhevm
-      .createEncryptedInput(traderContractAddress, signers.alice.address)
-      .add32(sellAmount)
-      .encrypt();
+      // 从 RevealStorage 获取并解密公开余额
+      const publicBalance = await revealStorage.getPublicBalance(signers.alice.address);
+      const decryptedUsdBalance = await fhevm.publicDecryptEuint(
+        FhevmType.euint32,
+        publicBalance[0]
+      );
 
-    const sellTx = await traderContract
-      .connect(signers.alice)
-      .sell(encryptedSellAmount.handles[0], encryptedSellAmount.inputProof);
-    await sellTx.wait();
+      // 验证交易后的余额（应该减少保证金）
+      expect(decryptedUsdBalance).to.eq(10000 - margin);
 
-    // 获取更新后的余额
-    const encryptedCashAfter = await traderContract.connect(signers.alice).getEncryptedCash();
-    const encryptedBTCAfter = await traderContract.connect(signers.alice).getEncryptedBTC();
-
-    // 解密余额
-    const clearCashAfter = await fhevm.userDecryptEuint(
-      FhevmType.euint32,
-      encryptedCashAfter,
-      traderContractAddress,
-      signers.alice,
-    );
-
-    const clearBTCAfter = await fhevm.userDecryptEuint(
-      FhevmType.euint32,
-      encryptedBTCAfter,
-      traderContractAddress,
-      signers.alice,
-    );
-
-    // 验证现金余额：初始10000 - 购买1000 + 卖出(1000 * 50000) = 10000 - 1000 + 50000000 = 50009000
-    expect(clearCashAfter).to.eq(50009000);
-    
-    // 验证BTC余额：购买2000 - 卖出1000 = 1000
-    expect(clearBTCAfter).to.eq(1000);
-  });
-
-  it("should not allow unregistered user to buy", async function () {
-    // 未注册用户尝试购买，应该失败
-    const buyAmount = 1000;
-    const encryptedBuyAmount = await fhevm
-      .createEncryptedInput(traderContractAddress, signers.bob.address)
-      .add32(buyAmount)
-      .encrypt();
-
-    await expect(
-      traderContract
-        .connect(signers.bob)
-        .buy(encryptedBuyAmount.handles[0], encryptedBuyAmount.inputProof)
-    ).to.be.revertedWith("Not registered");
-  });
-
-  it("should not allow unregistered user to sell", async function () {
-    // 未注册用户尝试卖出，应该失败
-    const sellAmount = 1000;
-    const encryptedSellAmount = await fhevm
-      .createEncryptedInput(traderContractAddress, signers.bob.address)
-      .add32(sellAmount)
-      .encrypt();
-
-    await expect(
-      traderContract
-        .connect(signers.bob)
-        .sell(encryptedSellAmount.handles[0], encryptedSellAmount.inputProof)
-    ).to.be.revertedWith("Not registered");
+      console.log(`交易前余额: 10000 USD`);
+      console.log(`交易后余额: ${decryptedUsdBalance} USD`);
+      console.log(`使用的保证金: ${margin} USD`);
+    });
   });
 }); 
