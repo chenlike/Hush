@@ -1,32 +1,35 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import {FHE, euint32} from "@fhevm/solidity/lib/FHE.sol";
-import {SepoliaConfig} from "./fhevm-config/ZamaConfig.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
+// Chainlink 价格预言机接口
+interface AggregatorV3Interface {
+    function decimals() external view returns (uint8);
+    function description() external view returns (string memory);
+    function version() external view returns (uint256);
+    function getRoundData(uint80 _roundId) external view returns (
+        uint80 roundId,
+        int256 answer,
+        uint256 startedAt,
+        uint256 updatedAt,
+        uint80 answeredInRound
+    );
+    function latestRoundData() external view returns (
+        uint80 roundId,
+        int256 answer,
+        uint256 startedAt,
+        uint256 updatedAt,
+        uint80 answeredInRound
+    );
+}
+
 /// @title BTC价格预言机合约
 /// @notice 提供BTC价格信息，支持明文和加密价格
-contract PriceOracle is SepoliaConfig, Initializable, UUPSUpgradeable, OwnableUpgradeable {
-    
-    // 价格更新者地址
-    address public priceUpdater;
-    
-    // BTC价格（USD），以美元为单位，例如 50000 表示 $50,000
-    uint32 public btcPriceUSD;
-    
-    // 加密的BTC价格
-    euint32 public encryptedBtcPrice;
-    
-    // 价格更新时间
-    uint256 public lastUpdateTime;
-    
-    // 价格更新事件
-    event PriceUpdated(uint32 oldPrice, uint32 newPrice, uint256 timestamp);
-    event EncryptedPriceUpdated(uint256 timestamp);
-    
+contract PriceOracle is Initializable, UUPSUpgradeable, OwnableUpgradeable {
+
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
@@ -35,76 +38,22 @@ contract PriceOracle is SepoliaConfig, Initializable, UUPSUpgradeable, OwnableUp
     function initialize() public initializer {
         __Ownable_init(msg.sender);
         __UUPSUpgradeable_init();
-        priceUpdater = msg.sender;
-        // 初始价格设置为 $50,000
-        btcPriceUSD = 50000;
-        encryptedBtcPrice = FHE.asEuint32(50000);
-        lastUpdateTime = block.timestamp;
     }
-    
+
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
-    
-    /// @notice 设置价格更新者
-    /// @param newUpdater 新的价格更新者地址
-    function setPriceUpdater(address newUpdater) external {
-        require(msg.sender == priceUpdater, "Only price updater can set new updater");
-        priceUpdater = newUpdater;
+
+    function aggregatorAddress() public view returns (address) {
+        return 0xF4030086522a5bEEa4988F8cA5B36dbC97BeE88c;
     }
     
-    /// @notice 更新BTC价格（明文）
-    /// @param newPriceUSD 新的BTC价格（美元）
-    function updatePrice(uint32 newPriceUSD) external {
-        require(msg.sender == priceUpdater, "Only price updater can update price");
-        require(newPriceUSD > 0, "Price must be greater than 0");
-        
-        uint32 oldPrice = btcPriceUSD;
-        btcPriceUSD = newPriceUSD;
-        lastUpdateTime = block.timestamp;
-        
-        emit PriceUpdated(oldPrice, newPriceUSD, block.timestamp);
+    function getLatestBtcPrice() public view returns (uint256) {
+        AggregatorV3Interface priceFeed = AggregatorV3Interface(aggregatorAddress());
+        (, int256 price, , , ) = priceFeed.latestRoundData();
+        return uint256(price);
     }
     
-    /// @notice 更新加密的BTC价格
-    /// @param newEncryptedPrice 新的加密BTC价格
-    function updateEncryptedPrice(euint32 newEncryptedPrice) external {
-        require(msg.sender == priceUpdater, "Only price updater can update encrypted price");
-        
-        encryptedBtcPrice = newEncryptedPrice;
-        lastUpdateTime = block.timestamp;
-        
-        // 授权新的加密价格
-        FHE.allowThis(encryptedBtcPrice);
-        
-        emit EncryptedPriceUpdated(block.timestamp);
-    }
-    
-    /// @notice 获取当前BTC价格（美元）
-    /// @return 当前BTC价格（美元）
-    function getBtcPrice() external view returns (uint32) {
-        return btcPriceUSD;
-    }
-    
-    /// @notice 获取当前BTC价格（美元）- 别名函数
-    /// @return 当前BTC价格（美元）
-    function getBtcPriceUSD() external view returns (uint32) {
-        return btcPriceUSD;
-    }
-    
-    /// @notice 获取加密的BTC价格
-    /// @return 加密的BTC价格
-    function getEncryptedBtcPrice() external view returns (euint32) {
-        return encryptedBtcPrice;
-    }
-    
-    /// @notice 获取价格更新时间
-    /// @return 最后更新时间
-    function getLastUpdateTime() external view returns (uint256) {
-        return lastUpdateTime;
-    }
-    
-    /// @notice 检查价格是否过期（超过1小时未更新）
-    /// @return 是否过期
-    function isPriceStale() external view returns (bool) {
-        return block.timestamp > lastUpdateTime + 1 hours;
+    function getDecimals() public view returns (uint8) {
+        AggregatorV3Interface priceFeed = AggregatorV3Interface(aggregatorAddress());
+        return priceFeed.decimals();
     }
 } 
