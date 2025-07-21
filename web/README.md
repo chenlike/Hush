@@ -1,36 +1,102 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Hush Trading Frontend
 
-## Getting Started
+隐私保护的加密货币交易平台前端界面。
 
-First, run the development server:
+## 功能特性
+
+- 🔐 钱包连接 (RainbowKit)
+- 📝 用户注册
+- 📊 交易界面
+- 🌙 暗黑模式支持
+- 🎨 现代化 UI (shadcn/ui)
+
+## 技术栈
+
+- React Router
+- RainbowKit + Wagmi
+- Tailwind CSS
+- shadcn/ui 组件库
+
+## 快速开始
+
+### 1. 安装依赖
+
+```bash
+npm install
+```
+
+### 2. 配置合约地址
+
+在 `lib/contracts.ts` 文件中更新合约地址：
+
+```typescript
+export const CONTRACTS = {
+  TRADER: {
+    address: '0x你的合约地址' as `0x${string}`,
+    // ...
+  }
+}
+```
+
+### 3. 配置 WalletConnect
+
+在 `lib/wagmi.ts` 文件中更新项目 ID：
+
+```typescript
+export const config = getDefaultConfig({
+  appName: 'Hush Trading',
+  projectId: '你的_WALLETCONNECT_PROJECT_ID',
+  // ...
+});
+```
+
+### 4. 启动开发服务器
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 项目结构
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```
+web/
+├── app/
+│   ├── components/
+│   │   ├── navbar.tsx          # 导航栏
+│   │   ├── trading-interface.tsx # 交易界面
+│   │   └── providers.tsx       # 钱包提供者
+│   ├── routes/
+│   │   └── home.tsx           # 主页面
+│   └── root.tsx               # 根组件
+├── lib/
+│   ├── contracts.ts           # 合约配置
+│   ├── utils.ts              # 工具函数
+│   └── wagmi.ts              # Wagmi 配置
+└── components.json           # shadcn/ui 配置
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 开发指南
 
-## Learn More
+### 添加新的合约交互
 
-To learn more about Next.js, take a look at the following resources:
+1. 在 `lib/contracts.ts` 中添加合约 ABI
+2. 在组件中使用 `useContractRead` 和 `useContractWrite` hooks
+3. 处理交易状态和错误
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### 样式定制
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+项目使用 Tailwind CSS 和 shadcn/ui，可以在 `app/app.css` 中自定义主题。
 
-## Deploy on Vercel
+## 部署
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+构建生产版本：
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+npm run build
+```
+
+## 注意事项
+
+- 确保合约已正确部署到 Sepolia 测试网
+- 更新合约地址和 ABI
+- 配置正确的 WalletConnect Project ID

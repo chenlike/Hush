@@ -4,6 +4,9 @@ pragma solidity ^0.8.24;
 import {FHE, euint32, externalEuint32, ebool, externalEbool} from "@fhevm/solidity/lib/FHE.sol";
 import {SepoliaConfig} from "./fhevm-config/ZamaConfig.sol";
 import {RevealStorage} from "./RevealStorage.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
 // 价格预言机接口
 interface IPriceOracle {
@@ -11,7 +14,7 @@ interface IPriceOracle {
     function isPriceStale() external view returns (bool);
 }
 
-contract Trader is SepoliaConfig {
+contract Trader is SepoliaConfig, Initializable, UUPSUpgradeable, OwnableUpgradeable {
     address public priceOracle; // 价格预言机地址
     RevealStorage public storageContract; // 公布密文结果的存储合约
     uint32 private constant INITIAL_CASH = 10_000; // 初始虚拟资金
@@ -19,10 +22,19 @@ contract Trader is SepoliaConfig {
     event PositionClosed(address indexed owner, uint256 indexed positionId, uint32 currentPrice);
     event BalanceRevealed(address indexed owner, uint32 usdBalance, uint32 btcBalance, uint256 timestamp);
 
-    constructor(address _priceOracle, address _storageAddr) {
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    function initialize(address _priceOracle, address _storageAddr) public initializer {
+        __Ownable_init(msg.sender);
+        __UUPSUpgradeable_init();
         priceOracle = _priceOracle;
         storageContract = RevealStorage(_storageAddr);
     }
+
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 
     // 用户余额结构体，存储密文
     struct Balance {

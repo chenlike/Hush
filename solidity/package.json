@@ -21,7 +21,8 @@
     "build:ts": "tsc --project tsconfig.json",
     "typechain": "cross-env TS_NODE_TRANSPILE_ONLY=true hardhat typechain",
     "gen-flattened": "hardhat flatten contracts/Trader.sol > FlattenedTrader.sol",
-    "deploy": "npx hardhat deploy --network sepolia"
+    "deploy": "npx hardhat deploy --network sepolia",
+    "upgrade": "npx hardhat deploy --tags upgrade --network sepolia"
   },
   "homepage": "https://github.com/chenlike/Hush/blob/main/README.md",
   "repository": {

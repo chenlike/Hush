@@ -2,8 +2,11 @@
 pragma solidity ^0.8.24;
 
 import {FHE, euint32} from "@fhevm/solidity/lib/FHE.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
-contract RevealStorage {
+contract RevealStorage is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     struct PublicBalance {
         euint32 usd;
         euint32 btc;
@@ -11,6 +14,18 @@ contract RevealStorage {
     }
 
     mapping(address => PublicBalance) public balances;
+
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    function initialize() public initializer {
+        __Ownable_init(msg.sender);
+        __UUPSUpgradeable_init();
+    }
+
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 
     function storePublicBalance(address user, euint32 usd, euint32 btc) external {
         balances[user] = PublicBalance({

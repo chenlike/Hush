@@ -1,40 +1,53 @@
 import { DeployFunction } from "hardhat-deploy/types";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
+import { ethers, upgrades } from "hardhat";
 
 const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const { deployer } = await hre.getNamedAccounts();
   const { deploy } = hre.deployments;
 
-  // 1. 首先部署 PriceOracle 合约
-  const deployedPriceOracle = await deploy("PriceOracle", {
-    from: deployer,
-    log: true,
+  console.log("开始部署可升级合约...");
+
+  // 1. 首先部署 PriceOracle 可升级合约
+  console.log("部署 PriceOracle 可升级合约...");
+  const PriceOracle = await ethers.getContractFactory("PriceOracle");
+  const priceOracle = await upgrades.deployProxy(PriceOracle, [], {
+    initializer: "initialize",
+    kind: "uups",
   });
+  await priceOracle.waitForDeployment();
+  const priceOracleAddress = await priceOracle.getAddress();
 
-  console.log(`PriceOracle contract: `, deployedPriceOracle.address);
+  console.log(`PriceOracle 代理合约地址: ${priceOracleAddress}`);
 
-  // 2. 部署 RevealStorage 合约
-  const deployedRevealStorage = await deploy("RevealStorage", {
-    from: deployer,
-    log: true,
+  // 2. 部署 RevealStorage 可升级合约
+  console.log("部署 RevealStorage 可升级合约...");
+  const RevealStorage = await ethers.getContractFactory("RevealStorage");
+  const revealStorage = await upgrades.deployProxy(RevealStorage, [], {
+    initializer: "initialize",
+    kind: "uups",
   });
+  await revealStorage.waitForDeployment();
+  const revealStorageAddress = await revealStorage.getAddress();
 
-  console.log(`RevealSt
-    orage contract: `, deployedRevealStorage.address);
+  console.log(`RevealStorage 代理合约地址: ${revealStorageAddress}`);
 
-  // 3. 部署 Trader 合约，传入 PriceOracle 和 RevealStorage 的地址
-  const deployedTrader = await deploy("Trader", {
-    from: deployer,
-    log: true,
-    args: [deployedPriceOracle.address, deployedRevealStorage.address],
+  // 3. 部署 Trader 可升级合约，传入 PriceOracle 和 RevealStorage 的地址
+  console.log("部署 Trader 可升级合约...");
+  const Trader = await ethers.getContractFactory("Trader");
+  const trader = await upgrades.deployProxy(Trader, [priceOracleAddress, revealStorageAddress], {
+    initializer: "initialize",
+    kind: "uups",
   });
+  await trader.waitForDeployment();
+  const traderAddress = await trader.getAddress();
 
-  console.log(`Trader contract: `, deployedTrader.address);
+  console.log(`Trader 代理合约地址: ${traderAddress}`);
   
-  console.log("所有合约部署完成！");
-  console.log("PriceOracle:", deployedPriceOracle.address);
-  console.log("RevealStorage:", deployedRevealStorage.address);
-  console.log("Trader:", deployedTrader.address);
+  console.log("\n所有可升级合约部署完成！");
+  console.log("PriceOracle 代理:", priceOracleAddress);
+  console.log("RevealStorage 代理:", revealStorageAddress);
+  console.log("Trader 代理:", traderAddress);
 
   // 4. 等待交易确认和Etherscan同步
   console.log("\n等待交易确认和Etherscan同步...");
@@ -68,18 +81,21 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     }
   };
 
-  // 验证所有合约
-  await verifyContract("PriceOracle", deployedPriceOracle.address, []);
-  await verifyContract("RevealStorage", deployedRevealStorage.address, []);
-  await verifyContract("Trader", deployedTrader.address, [deployedPriceOracle.address, deployedRevealStorage.address]);
+  // 验证所有合约（可升级合约的验证方式略有不同）
+  await verifyContract("PriceOracle", priceOracleAddress, []);
+  await verifyContract("RevealStorage", revealStorageAddress, []);
+  await verifyContract("Trader", traderAddress, [priceOracleAddress, revealStorageAddress]);
 
-  console.log("\n🎉 部署和验证完成！");
-  console.log("合约地址:");
-  console.log("PriceOracle:", deployedPriceOracle.address);
-  console.log("RevealStorage:", deployedRevealStorage.address);
-  console.log("Trader:", deployedTrader.address);
+  console.log("\n🎉 可升级合约部署和验证完成！");
+  console.log("代理合约地址:");
+  console.log("PriceOracle 代理:", priceOracleAddress);
+  console.log("RevealStorage 代理:", revealStorageAddress);
+  console.log("Trader 代理:", traderAddress);
+  
+  console.log("\n注意：这些是可升级合约，使用代理模式部署。");
+  console.log("如需升级合约，请使用 upgrades.upgradeProxy() 方法。");
 };
 
 export default func;
-func.id = "deploy_all_contracts"; // id required to prevent reexecution
+func.id = "deploy_upgradeable_contracts"; // id required to prevent reexecution
 func.tags = ["PriceOracle", "RevealStorage", "Trader"];

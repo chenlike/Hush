@@ -3,10 +3,13 @@ pragma solidity ^0.8.24;
 
 import {FHE, euint32} from "@fhevm/solidity/lib/FHE.sol";
 import {SepoliaConfig} from "./fhevm-config/ZamaConfig.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
 /// @title BTC价格预言机合约
 /// @notice 提供BTC价格信息，支持明文和加密价格
-contract PriceOracle is SepoliaConfig {
+contract PriceOracle is SepoliaConfig, Initializable, UUPSUpgradeable, OwnableUpgradeable {
     
     // 价格更新者地址
     address public priceUpdater;
@@ -24,13 +27,22 @@ contract PriceOracle is SepoliaConfig {
     event PriceUpdated(uint32 oldPrice, uint32 newPrice, uint256 timestamp);
     event EncryptedPriceUpdated(uint256 timestamp);
     
+    /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
+        _disableInitializers();
+    }
+    
+    function initialize() public initializer {
+        __Ownable_init(msg.sender);
+        __UUPSUpgradeable_init();
         priceUpdater = msg.sender;
         // 初始价格设置为 $50,000
         btcPriceUSD = 50000;
         encryptedBtcPrice = FHE.asEuint32(50000);
         lastUpdateTime = block.timestamp;
     }
+    
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
     
     /// @notice 设置价格更新者
     /// @param newUpdater 新的价格更新者地址
