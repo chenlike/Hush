@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
 // Chainlink 价格预言机接口
 interface AggregatorV3Interface {
@@ -26,34 +24,33 @@ interface AggregatorV3Interface {
     );
 }
 
+interface IPriceOracle {
+    function getLatestBtcPrice() external view returns (uint256);
+    function getDecimals() external view returns (uint8);
+}
+
 /// @title BTC价格预言机合约
 /// @notice 提供BTC价格信息，支持明文和加密价格
-contract PriceOracle is Initializable, UUPSUpgradeable, OwnableUpgradeable {
+contract PriceOracle is Ownable, IPriceOracle {
 
-    /// @custom:oz-upgrades-unsafe-allow constructor
-    constructor() {
-        _disableInitializers();
-    }
-    
-    function initialize() public initializer {
-        __Ownable_init(msg.sender);
-        __UUPSUpgradeable_init();
+    constructor(address aggregatorAddress) Ownable(msg.sender) {
+        _aggregatorAddress = aggregatorAddress;
     }
 
-    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
+    address private _aggregatorAddress;
 
-    function aggregatorAddress() public view returns (address) {
-        return 0xF4030086522a5bEEa4988F8cA5B36dbC97BeE88c;
+    function setAggregatorAddress(address aggregatorAddress) public onlyOwner {
+        _aggregatorAddress = aggregatorAddress;
     }
     
     function getLatestBtcPrice() public view returns (uint256) {
-        AggregatorV3Interface priceFeed = AggregatorV3Interface(aggregatorAddress());
+        AggregatorV3Interface priceFeed = AggregatorV3Interface(_aggregatorAddress);
         (, int256 price, , , ) = priceFeed.latestRoundData();
         return uint256(price);
     }
     
     function getDecimals() public view returns (uint8) {
-        AggregatorV3Interface priceFeed = AggregatorV3Interface(aggregatorAddress());
+        AggregatorV3Interface priceFeed = AggregatorV3Interface(_aggregatorAddress);
         return priceFeed.decimals();
     }
 } 

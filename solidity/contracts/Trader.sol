@@ -4,37 +4,27 @@ pragma solidity ^0.8.24;
 import {FHE, euint32, externalEuint32, ebool, externalEbool} from "@fhevm/solidity/lib/FHE.sol";
 import {SepoliaConfig} from "./fhevm-config/ZamaConfig.sol";
 import {RevealStorage} from "./RevealStorage.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 
 // 价格预言机接口
 interface IPriceOracle {
-    function getBtcPrice() external view returns (uint32);
-    function isPriceStale() external view returns (bool);
+    function getLatestBtcPrice() external view returns (uint32);
+    function getDecimals() external view returns (uint8);
 }
 
-contract Trader is SepoliaConfig, Initializable, UUPSUpgradeable, OwnableUpgradeable {
+contract Trader is SepoliaConfig, Ownable {
     address public priceOracle; // 价格预言机地址
     RevealStorage public storageContract; // 公布密文结果的存储合约
-    uint32 private constant INITIAL_CASH = 10_000; // 初始虚拟资金
+    uint256 private constant INITIAL_CASH_BASE = 10_000; // 初始虚拟资金基数
+    uint8 public constant TRADER_DECIMALS = 8; // 合约自己的小数位数
 
     event PositionClosed(address indexed owner, uint256 indexed positionId, uint32 currentPrice);
     event BalanceRevealed(address indexed owner, uint32 usdBalance, uint32 btcBalance, uint256 timestamp);
 
-    /// @custom:oz-upgrades-unsafe-allow constructor
-    constructor() {
-        _disableInitializers();
-    }
-
-    function initialize(address _priceOracle, address _storageAddr) public initializer {
-        __Ownable_init(msg.sender);
-        __UUPSUpgradeable_init();
+    constructor(address _priceOracle, address _storageAddr) Ownable(msg.sender) {
         priceOracle = _priceOracle;
         storageContract = RevealStorage(_storageAddr);
     }
-
-    function _authorizeUpgrade(address newImplementation) internal override onlyOwner {}
 
     // 用户余额结构体，存储密文
     struct Balance {
@@ -80,7 +70,8 @@ contract Trader is SepoliaConfig, Initializable, UUPSUpgradeable, OwnableUpgrade
     // 注册账户并初始化密文资金
     function register() external {
         require(!isRegistered[msg.sender], "Already registered");
-        euint32 init = FHE.asEuint32(INITIAL_CASH);
+        uint256 adjustedInitialCash = getAdjustedInitialCash();
+        euint32 init = FHE.asEuint32(adjustedInitialCash);
         balances[msg.sender] = Balance({ cash: init });
         FHE.allowThis(init);
         FHE.allow(init, msg.sender);
@@ -113,15 +104,14 @@ contract Trader is SepoliaConfig, Initializable, UUPSUpgradeable, OwnableUpgrade
     // 开多/空单（需提供 FHE 外部密文及证明）
     function openPosition(
         externalEuint32 inputMargin,
-        bytes calldata proofMargin,
         externalEbool inputDir,
-        bytes calldata proofDir
+        bytes calldata proof
     ) external returns (uint256) {
         require(isRegistered[msg.sender], "Not registered");
 
-        // 解密输入密文
-        euint32 margin = FHE.fromExternal(inputMargin, proofMargin);
-        ebool isLong = FHE.fromExternal(inputDir, proofDir);
+        // 解密输入密文，使用同一个 proof
+        euint32 margin = FHE.fromExternal(inputMargin, proof);
+        ebool isLong = FHE.fromExternal(inputDir, proof);
 
         // 判断是否有足够余额开仓，若不足则使用 0
         euint32 cur = balances[msg.sender].cash;
@@ -136,7 +126,7 @@ contract Trader is SepoliaConfig, Initializable, UUPSUpgradeable, OwnableUpgrade
         positions[pid] = Position({
             owner: msg.sender,
             margin: useM,
-            entryPrice: IPriceOracle(priceOracle).getBtcPrice(),
+            entryPrice: getAdjustedBtcPrice(),
             isLong: isLong,
             isOpen: true
         });
@@ -154,7 +144,7 @@ contract Trader is SepoliaConfig, Initializable, UUPSUpgradeable, OwnableUpgrade
     // 平仓操作，自动判定盈亏
     function closePosition(uint256 positionId) external validPosition(positionId) {
         Position storage p = positions[positionId];
-        uint32 currentPrice = IPriceOracle(priceOracle).getBtcPrice();
+        uint32 currentPrice = getAdjustedBtcPrice();
 
         euint32 entryPriceEnc = FHE.asEuint32(p.entryPrice);
         euint32 currentPriceEnc = FHE.asEuint32(currentPrice);
@@ -222,48 +212,53 @@ contract Trader is SepoliaConfig, Initializable, UUPSUpgradeable, OwnableUpgrade
         emit BalanceRevealed(msg.sender, usdBalance, btcBalance, block.timestamp);
     }
 
-    // 获取用户公开记录结构
-    function getRevealRecord(address user) external view returns (
-        uint32 usdBalance,
-        uint32 btcBalance,
-        uint256 timestamp,
-        bool exists,
-        ebool usdVerified,
-        ebool btcVerified,
-        bool usdVerifiedDecrypted,
-        bool btcVerifiedDecrypted,
-        bool isDecryptionPending
-    ) {
-        RevealRecord storage record = revealRecords[user];
-        return (
-            record.usdBalance,
-            record.btcBalance,
-            record.timestamp,
-            record.exists,
-            record.usdVerified,
-            record.btcVerified,
-            record.usdVerifiedDecrypted,
-            record.btcVerifiedDecrypted,
-            record.isDecryptionPending
-        );
-    }
+
 
     // 查询用户是否已经公开余额
     function hasRevealed(address user) external view returns (bool) {
         return revealRecords[user].exists;
     }
 
-    // 公开查看其他用户的揭示余额（任何人都可以调用，不需要注册）
-    function getPublicRevealedBalance(address user) external view returns (euint32, euint32, uint256) {
-        require(revealRecords[user].exists, "User has not revealed balance");
-        return storageContract.getPublicBalance(user);
+
+
+    // 获取价格预言机的小数位数
+    function getPriceDecimals() external view returns (uint8) {
+        return IPriceOracle(priceOracle).getDecimals();
     }
 
-    // 获取所有已揭示余额的用户列表（简化版本，实际应用中可能需要更复杂的实现）
-    function getRevealedUsers() external view returns (address[] memory) {
-        // 注意：这个函数在实际应用中可能需要更复杂的实现
-        // 因为 Solidity 没有内置的方法来遍历 mapping
-        // 这里返回空数组作为示例
-        return new address[](0);
+    // 获取调整后的BTC价格（转换为合约自己的小数位数）
+    function getAdjustedBtcPrice() internal view returns (uint32) {
+        uint256 rawPrice = IPriceOracle(priceOracle).getLatestBtcPrice();
+        uint8 oracleDecimals = IPriceOracle(priceOracle).getDecimals();
+        
+        // 将预言机价格转换为合约的小数位数
+        uint256 adjustedPrice;
+        if (oracleDecimals > TRADER_DECIMALS) {
+            // 如果预言机小数位数更多，需要除以差值
+            adjustedPrice = rawPrice / (10 ** (oracleDecimals - TRADER_DECIMALS));
+        } else if (oracleDecimals < TRADER_DECIMALS) {
+            // 如果预言机小数位数更少，需要乘以差值
+            adjustedPrice = rawPrice * (10 ** (TRADER_DECIMALS - oracleDecimals));
+        } else {
+            // 小数位数相同，直接使用
+            adjustedPrice = rawPrice;
+        }
+        
+        return uint32(adjustedPrice);
+    }
+
+    // 获取调整后的初始资金（使用合约自己的小数位数）
+    function getAdjustedInitialCash() internal view returns (uint256) {
+        return INITIAL_CASH_BASE * (10 ** TRADER_DECIMALS);
+    }
+
+    // 获取当前预言机的小数位数
+    function getCurrentDecimals() external view returns (uint8) {
+        return IPriceOracle(priceOracle).getDecimals();
+    }
+
+    // 获取合约自己的小数位数
+    function getTraderDecimals() external view returns (uint8) {
+        return TRADER_DECIMALS;
     }
 }
