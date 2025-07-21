@@ -90,7 +90,7 @@ contract PositionTrader is SepoliaConfig, Ownable {
         uint64 currentPrice = getAdjustedBtcPrice();
 
         // 将USD保证金转换为BTC数量 (margin / price)
-        euint64 btcAmount = FHE.div(usedMargin, FHE.asEuint64(currentPrice));
+        euint64 btcAmount = FHE.div(usedMargin, currentPrice);
 
         // 扣减保证金并更新余额
         balances[msg.sender].usd = FHE.sub(currentBalance, usedMargin);
