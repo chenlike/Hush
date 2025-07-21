@@ -19,7 +19,8 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     log: true,
   });
 
-  console.log(`RevealStorage contract: `, deployedRevealStorage.address);
+  console.log(`RevealSt
+    orage contract: `, deployedRevealStorage.address);
 
   // 3. 部署 Trader 合约，传入 PriceOracle 和 RevealStorage 的地址
   const deployedTrader = await deploy("Trader", {

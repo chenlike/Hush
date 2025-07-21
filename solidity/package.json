@@ -1,16 +1,32 @@
 {
   "name": "fhevm-hardhat-template",
-  "description": "Hardhat-based template for developing FHEVM Solidity smart contracts",
+  "description": "Hush is a privacy-first on-chain trading bot leaderboard powered by Zama's FHE.",
   "version": "0.0.1",
   "engines": {
     "node": ">=20",
     "npm": ">=7.0.0"
   },
   "license": "BSD-3-Clause-Clear",
-  "homepage": "https://github.com/zama-ai/fhevm-hardhat-template/README.md",
+  "scripts": {
+    "clean": "rimraf ./fhevmTemp ./artifacts ./cache ./coverage ./types ./coverage.json ./dist && npm run typechain",
+    "compile": "cross-env TS_NODE_TRANSPILE_ONLY=true hardhat compile",
+    "coverage": "SOLIDITY_COVERAGE=true hardhat coverage --solcoverjs ./.solcover.js --temp artifacts --testfiles \"test/**/*.ts\" && npm run typechain",
+    "lint": "npm run lint:sol && npm run lint:ts && npm run prettier:check",
+    "lint:sol": "solhint --max-warnings 0 \"contracts/**/*.sol\"",
+    "lint:ts": "eslint --ignore-path ./.eslintignore --ext .js,.ts .",
+    "postcompile": "npm run typechain",
+    "prettier:check": "prettier --check \"**/*.{js,json,md,sol,ts,yml}\"",
+    "prettier:write": "prettier --write \"**/*.{js,json,md,sol,ts,yml}\"",
+    "test": "hardhat test",
+    "build:ts": "tsc --project tsconfig.json",
+    "typechain": "cross-env TS_NODE_TRANSPILE_ONLY=true hardhat typechain",
+    "gen-flattened": "hardhat flatten contracts/Trader.sol > FlattenedTrader.sol",
+    "deploy": "npx hardhat deploy --network sepolia"
+  },
+  "homepage": "https://github.com/chenlike/Hush/blob/main/README.md",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/zama-ai/fhevm-hardhat-template.git"
+    "url": "git+https://github.com/chenlike/Hush.git"
   },
   "keywords": [
     "fhevm",
@@ -21,7 +37,8 @@
     "wallet",
     "web3",
     "typescript",
-    "hardhat"
+    "hardhat",
+    "btc"
   ],
   "dependencies": {
     "@fhevm/solidity": "^0.7.0",
@@ -70,22 +87,7 @@
   "files": [
     "contracts"
   ],
-  "scripts": {
-    "clean": "rimraf ./fhevmTemp ./artifacts ./cache ./coverage ./types ./coverage.json ./dist && npm run typechain",
-    "compile": "cross-env TS_NODE_TRANSPILE_ONLY=true hardhat compile",
-    "coverage": "SOLIDITY_COVERAGE=true hardhat coverage --solcoverjs ./.solcover.js --temp artifacts --testfiles \"test/**/*.ts\" && npm run typechain",
-    "lint": "npm run lint:sol && npm run lint:ts && npm run prettier:check",
-    "lint:sol": "solhint --max-warnings 0 \"contracts/**/*.sol\"",
-    "lint:ts": "eslint --ignore-path ./.eslintignore --ext .js,.ts .",
-    "postcompile": "npm run typechain",
-    "prettier:check": "prettier --check \"**/*.{js,json,md,sol,ts,yml}\"",
-    "prettier:write": "prettier --write \"**/*.{js,json,md,sol,ts,yml}\"",
-    "test": "hardhat test",
-    "build:ts": "tsc --project tsconfig.json",
-    "typechain": "cross-env TS_NODE_TRANSPILE_ONLY=true hardhat typechain",
-    "gen-flattened": "hardhat flatten contracts/Trader.sol > FlattenedTrader.sol",
-    "deploy": "npx hardhat deploy --network sepolia"
-  },
+
   "overrides": {
     "ws@>=7.0.0 <7.5.10": ">=7.5.10",
     "axios@>=1.3.2 <=1.7.3": ">=1.7.4",
