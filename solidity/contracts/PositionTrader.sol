@@ -19,11 +19,7 @@ contract PositionTrader is SepoliaConfig, Ownable {
         priceOracleAddress = _priceOracle;
     }
 
-    // 持仓状态枚举
-    enum PositionStatus {
-        INACTIVE,   // 未激活/已关闭
-        ACTIVE      // 活跃
-    }
+
 
     // 持仓结构体
     struct Position {
@@ -32,7 +28,6 @@ contract PositionTrader is SepoliaConfig, Ownable {
         euint64 btcSize;         // BTC持仓大小（带精度因子）
         uint64 entryPrice;       // 开仓价格（带精度）
         ebool isLong;           // 是否多头
-        PositionStatus status;   // 持仓状态
         uint256 openTimestamp;   // 开仓时间戳
     }
     
@@ -79,8 +74,7 @@ contract PositionTrader is SepoliaConfig, Ownable {
         euint64 marginAmount,
         euint64 btcSize,
         uint64 entryPrice,
-        ebool isLong,
-        PositionStatus status
+        ebool isLong
     ) {
         Position memory position = positions[pid];
         return (
@@ -88,16 +82,10 @@ contract PositionTrader is SepoliaConfig, Ownable {
             position.marginAmount,
             position.btcSize,
             position.entryPrice,
-            position.isLong,
-            position.status
+            position.isLong
         );
     }
 
-    // === 判断持仓是否已经平仓结束 ===
-    function isOver(uint256 pid) public view returns (bool) {
-        require(pid > 0 && pid <= positionCounter, "Invalid position ID");
-        return positions[pid].status == PositionStatus.INACTIVE;
-    }
 
     function getUserPositionIds(address user) external view returns (uint256[] memory) {
         return userPositions[user];
@@ -176,7 +164,6 @@ contract PositionTrader is SepoliaConfig, Ownable {
             btcSize: btcSize,
             entryPrice: currentPrice,
             isLong: isLong,
-            status: PositionStatus.ACTIVE,
             openTimestamp: block.timestamp
         });
 
@@ -188,10 +175,9 @@ contract PositionTrader is SepoliaConfig, Ownable {
     }
 
     // === 平仓函数 ===
-    function closePosition(uint256 pid) external {
+    function closePosition(uint256 pid,externalEuint64 _btcAmount,bytes calldata proof) external {
         Position storage pos = positions[pid];
         require(pos.owner == msg.sender, "Not position owner");
-        require(pos.status == PositionStatus.ACTIVE, "Position already closed");
         require(!isOver(pid), "Position is already over");
 
         // 获取当前价格
@@ -203,10 +189,14 @@ contract PositionTrader is SepoliaConfig, Ownable {
         bool isPriceUp = exitPrice > entryPrice;
         uint64 priceChange = isPriceUp ? exitPrice - entryPrice : entryPrice - exitPrice;
 
+
+        euint64 closeBtcAmount = FHE.mul(FHE.fromExternal(_btcAmount, proof),FHE.asEuint64(PRECISION_FACTOR));
+        
+
         // 计算盈亏金额
         // 盈亏 = BTC持仓大小 * 价格变化 / 精度因子
         euint64 pnlAmount = FHE.div(
-            FHE.mul(pos.btcSize, FHE.asEuint64(priceChange)),
+            FHE.mul(closeBtcAmount, FHE.asEuint64(priceChange)),
             PRECISION_FACTOR
         );
 
@@ -237,7 +227,6 @@ contract PositionTrader is SepoliaConfig, Ownable {
         balances[msg.sender].usd = FHE.add(balances[msg.sender].usd, finalSettlement);
 
         // 关闭持仓
-        pos.status = PositionStatus.INACTIVE;
         pos.marginAmount = FHE.asEuint64(0);
         pos.btcSize = FHE.asEuint64(0);
 
@@ -247,26 +236,6 @@ contract PositionTrader is SepoliaConfig, Ownable {
         _authorizeHandle(pos.btcSize);
 
         emit PositionClosed(msg.sender, pid, exitPrice);
-    }
-
-    // === 紧急平仓函数（管理员可调用，用于风险管理） ===
-    function emergencyClosePosition(uint256 pid) external onlyOwner {
-        Position storage pos = positions[pid];
-        require(pos.status == PositionStatus.ACTIVE, "Position already closed");
-        require(!isOver(pid), "Position is already over");
-
-        // 紧急平仓只返还保证金，不计算盈亏
-        balances[pos.owner].usd = FHE.add(balances[pos.owner].usd, pos.marginAmount);
-
-        // 关闭持仓
-        pos.status = PositionStatus.INACTIVE;
-        pos.marginAmount = FHE.asEuint64(0);
-        pos.btcSize = FHE.asEuint64(0);
-
-        // 授权处理
-        _authorizeHandle(balances[pos.owner].usd);
-        _authorizeHandle(pos.marginAmount);
-        _authorizeHandle(pos.btcSize);
     }
 
     // === 价格获取函数 ===
