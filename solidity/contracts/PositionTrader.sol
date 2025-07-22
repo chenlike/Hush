@@ -3,7 +3,6 @@ pragma solidity ^0.8.24;
 
 import {FHE, euint64, externalEuint64, ebool, externalEbool} from "@fhevm/solidity/lib/FHE.sol";
 import {SepoliaConfig} from "./fhevm-config/ZamaConfig.sol";
-import {RevealStorage} from "./RevealStorage.sol";
 import {IPriceOracle} from "./PriceOracle.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
@@ -13,9 +12,8 @@ contract PositionTrader is SepoliaConfig, Ownable {
     uint64 public constant INITIAL_CASH_BASE = 10_000; // 初始虚拟资金基数
     uint64 public constant DECIMALS = 8; // 小数位数
 
-    constructor(address _priceOracle, address _storageAddr) Ownable(msg.sender) {
+    constructor(address _priceOracle) Ownable(msg.sender) {
         priceOracleAddress = _priceOracle;
-        revealAddress = _storageAddr;
     }
 
     // 持仓结构体
