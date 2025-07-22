@@ -13,7 +13,7 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const PriceOracle = await ethers.getContractFactory("PriceOracle");
   
   // Sepolia测试网上的BTC/USD价格预言机地址
-  const BTC_USD_AGGREGATOR_SEPOLIA = "0xF4030086522a5bEEa4988F8cA5B36dbC97BeE88c";
+  const BTC_USD_AGGREGATOR_SEPOLIA = "0x1b44F3514812d835EB1BDB0acB33d3fA3351Ee43";
   
   const priceOracle = await PriceOracle.deploy(BTC_USD_AGGREGATOR_SEPOLIA as any);
   await priceOracle.waitForDeployment();

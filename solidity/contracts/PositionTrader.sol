@@ -49,8 +49,8 @@ contract PositionTrader is SepoliaConfig, Ownable {
         uint64 initialUsdAmount = uint64(INITIAL_CASH_BASE * (10 ** DECIMALS));
         euint64 initialUsd = FHE.asEuint64(initialUsdAmount);
         euint64 initialBtc = FHE.asEuint64(0);
-        FHE.allowThis(initialUsd);
-        FHE.allow(initialUsd, msg.sender);
+        _authorizeHandle(initialUsd);
+        _authorizeHandle(initialBtc);
 
         // 设置用户余额
         balances[msg.sender] = Balance({usd: initialUsd, btc: initialBtc});
