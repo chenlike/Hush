@@ -1,15 +1,18 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useAccount, useContractRead, useContractWrite, useWaitForTransactionReceipt } from 'wagmi';
+import { useAccount, useContractRead, useContractWrite, useWaitForTransactionReceipt, useWalletClient } from 'wagmi';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { sepolia } from 'wagmi/chains';
 import { CONTRACTS } from '../../lib/contracts';
 import { fheService } from '../../lib/fhe-service';
 import { ErrorBanner } from './error-banner';
+import { hexlify } from 'ethers';
+
 
 export function TradingInterface() {
   const { address, isConnected } = useAccount();
+  const { data: walletClient } = useWalletClient();
   const [isLoading, setIsLoading] = useState(false);
   const [margin, setMargin] = useState('');
   const [isLong, setIsLong] = useState(true);
@@ -23,6 +26,11 @@ export function TradingInterface() {
   const [queryPositionId, setQueryPositionId] = useState('');
   const [positionInfo, setPositionInfo] = useState<any>(null);
   const [isQuerying, setIsQuerying] = useState(false);
+  
+  // 持仓解密相关状态
+  const [decryptedPositionInfo, setDecryptedPositionInfo] = useState<any>(null);
+  const [isDecryptingPosition, setIsDecryptingPosition] = useState(false);
+  const [hasDecryptedPosition, setHasDecryptedPosition] = useState(false);
 
   // 辅助函数：将Uint8Array转换为hex字符串
   const uint8ArrayToHex = (array: Uint8Array): `0x${string}` => {
@@ -162,9 +170,10 @@ export function TradingInterface() {
       // 添加交易方向 (ebool)
       encryptedInput.addBool(isLong);
       
-      // 添加保证金 (euint64)
+      // 添加保证金 (euint64) - 转换为合约的小数格式 (8位小数)
       const marginValue = parseInt(margin);
-      encryptedInput.add64(BigInt(marginValue));
+      const marginWithDecimals = marginValue * 1e8; // 转换为8位小数格式
+      encryptedInput.add64(BigInt(marginWithDecimals));
       
       // 加密所有输入
       const encryptedResult = await encryptedInput.encrypt();
@@ -181,12 +190,7 @@ export function TradingInterface() {
       const isLongHandle = uint8ArrayToHex(encryptedResult.handles[0]);
       const marginHandle = uint8ArrayToHex(encryptedResult.handles[1]);
       
-      console.log('准备调用合约，参数:', {
-        address: CONTRACTS.TRADER.address,
-        isLongHandle,
-        marginHandle,
-        proof: encryptedResult.inputProof
-      });
+
       
       let s = openPosition({
         address: CONTRACTS.TRADER.address,
@@ -195,7 +199,7 @@ export function TradingInterface() {
         args: [
           isLongHandle, // _isLong
           marginHandle, // _margin
-          encryptedResult.inputProof as any // proof
+          hexlify(encryptedResult.inputProof) as any // proof
         ]
       });
       console.log("开仓调用完成");
@@ -233,8 +237,61 @@ export function TradingInterface() {
   useEffect(() => {
     if (positionData) {
       setPositionInfo(positionData);
+      // 重置解密状态
+      setDecryptedPositionInfo(null);
+      setHasDecryptedPosition(false);
     }
   }, [positionData]);
+
+  // 解密持仓信息
+  const handleDecryptPosition = async () => {
+    if (!positionInfo || !address || !walletClient) return;
+
+    setIsDecryptingPosition(true);
+    setHasDecryptedPosition(true);
+
+    try {
+      // 持仓信息结构: [owner, margin, btcAmount, entryPrice, isLong]
+      // margin 和 btcAmount 是加密的，需要解密
+      const marginHandle = String(positionInfo[1]);
+      const btcAmountHandle = String(positionInfo[2]);
+      const isLongHandle = String(positionInfo[4]);
+
+      const handles = [marginHandle, btcAmountHandle, isLongHandle];
+      const results = await fheService.decryptMultipleValuesWithWalletClient(
+        handles,
+        CONTRACTS.TRADER.address,
+        walletClient
+      );
+
+      console.log('持仓解密结果:', results);
+
+      const margin = results[marginHandle];
+      const btcAmount = results[btcAmountHandle];
+      const isLong = results[isLongHandle];
+
+      // 格式化显示 - 保证金使用2位小数，BTC数量使用8位小数
+      const marginFormatted = (Number(margin) / 1e8).toFixed(2);
+      const btcAmountFormatted = (Number(btcAmount) / 1e8).toFixed(8);
+
+      setDecryptedPositionInfo({
+        owner: positionInfo[0],
+        margin: marginFormatted,
+        btcAmount: btcAmountFormatted,
+        entryPrice: positionInfo[3]?.toString() || 'N/A',
+        isLong: isLong
+      });
+    } catch (error: any) {
+      console.error('解密持仓失败:', error);
+      if (error.message.includes('user rejected')) {
+        setDecryptedPositionInfo({ error: '用户取消了签名' });
+      } else {
+        setDecryptedPositionInfo({ error: `解密失败: ${error.message}` });
+      }
+    } finally {
+      setIsDecryptingPosition(false);
+    }
+  };
 
   const handleClosePosition = async () => {
     if (!positionId || !address || !fheReady || !closeBtcAmount) return;
@@ -243,9 +300,10 @@ export function TradingInterface() {
       // 创建加密输入实例用于平仓
       const encryptedInput = fheService.createEncryptedInput(CONTRACTS.TRADER.address, address);
       
-      // 添加要平仓的BTC数量 (使用用户输入的数量)
-      const closeBtcAmountValue = parseInt(closeBtcAmount);
-      encryptedInput.add64(BigInt(closeBtcAmountValue));
+      // 添加要平仓的BTC数量 (使用用户输入的数量) - 转换为合约的小数格式 (8位小数)
+      const closeBtcAmountValue = parseFloat(closeBtcAmount);
+      const closeBtcAmountWithDecimals = Math.floor(closeBtcAmountValue * 1e8); // 转换为8位小数格式
+      encryptedInput.add64(BigInt(closeBtcAmountWithDecimals));
       
       // 加密输入
       const encryptedResult = await encryptedInput.encrypt();
@@ -339,8 +397,11 @@ export function TradingInterface() {
                   value={margin}
                   onChange={(e) => setMargin(e.target.value)}
                   className="w-full px-3 py-2 border rounded-md bg-background"
-                  placeholder="输入保证金金额"
+                  placeholder="输入保证金金额 (如: 1000)"
                 />
+                <p className="text-xs text-muted-foreground mt-1">
+                  请输入USD金额，系统会自动转换为合约格式
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium mb-2">交易方向</label>
@@ -412,6 +473,39 @@ export function TradingInterface() {
                     <p>开仓价格: ${positionInfo[3]?.toString() || 'N/A'}</p>
                     <p>交易方向: {positionInfo[4] ? '多头' : '空头'}</p>
                   </div>
+                  
+                  {/* 解密功能 */}
+                  {isDecryptingPosition ? (
+                    <p className="text-sm text-blue-500">正在解密持仓信息...</p>
+                  ) : decryptedPositionInfo ? (
+                    <div className="mt-3 pt-3 border-t space-y-1">
+                      <h4 className="font-medium text-green-600">解密后的持仓信息:</h4>
+                      {decryptedPositionInfo.error ? (
+                        <p className="text-sm text-red-500">{decryptedPositionInfo.error}</p>
+                      ) : (
+                        <div className="text-sm space-y-1">
+                          <p>保证金: ${decryptedPositionInfo.margin}</p>
+                          <p>BTC数量: {decryptedPositionInfo.btcAmount}</p>
+                          <p>开仓价格: ${decryptedPositionInfo.entryPrice}</p>
+                          <p>交易方向: {decryptedPositionInfo.isLong ? '多头' : '空头'}</p>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="mt-3 pt-3 border-t">
+                      <button
+                        onClick={handleDecryptPosition}
+                        disabled={!positionInfo || !fheReady}
+                        className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        解密持仓信息
+                      </button>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        注意：持仓信息使用全同态加密技术保护，解密过程需要用户签名
+                      </p>
+                    </div>
+                  )}
+                  
                   {positionInfo[0] === address && (
                     <div className="mt-3 pt-3 border-t">
                       <button
@@ -447,11 +541,15 @@ export function TradingInterface() {
                 <label className="block text-sm font-medium mb-2">平仓 BTC 数量</label>
                 <input
                   type="number"
+                  step="0.00000001"
                   value={closeBtcAmount}
                   onChange={(e) => setCloseBtcAmount(e.target.value)}
                   className="w-full px-3 py-2 border rounded-md bg-background"
-                  placeholder="输入平仓数量"
+                  placeholder="输入平仓数量 (如: 0.001)"
                 />
+                <p className="text-xs text-muted-foreground mt-1">
+                  请输入BTC数量，支持8位小数精度
+                </p>
               </div>
               {/* 暂时注释掉持仓列表，因为合约中没有getPositionIds函数 */}
               {/* {positionIds && positionIds.length > 0 && (
