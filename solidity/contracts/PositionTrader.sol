@@ -119,47 +119,41 @@ contract PositionTrader is SepoliaConfig, Ownable {
         return (position.owner, position.margin, position.btcAmount, position.entryPrice, position.isLong);
     }
 
-    function closePosition(uint256 pid, externalEuint64 _btcAmount, bytes calldata proof) external {
+    function closePosition(uint256 pid) external {
         Position storage pos = positions[pid];
         require(pos.owner == msg.sender, "Not position owner");
 
-        // 1. 解密用户希望平仓的 BTC 数量
-        euint64 closeBtcAmount = FHE.fromExternal(_btcAmount, proof);
-
-        // 2. 计算可平仓数量 = min(用户申请, 当前仓位剩余)
-        euint64 closeableBtcAmount = FHE.min(pos.btcAmount, closeBtcAmount);
-
-        // 3. 计算剩余 BTC 数量
-        euint64 remainingBtc = FHE.sub(pos.btcAmount, closeableBtcAmount);
-
-        // 4. 计算平仓部分的保证金
-        //    usedMargin / btcAmount = priceOnOpen => usedMargin = btcAmount * entryPrice
-        //    因此平仓部分的保证金 = closeableBtcAmount * entryPrice
-        euint64 closedMargin = FHE.mul(closeableBtcAmount, FHE.asEuint64(pos.entryPrice));
-
-        // 5. 计算盈亏
+        // 1. 计算盈亏
         uint64 exitPrice = getAdjustedBtcPrice();
-        uint64 absDiff = exitPrice > pos.entryPrice ? exitPrice - pos.entryPrice : pos.entryPrice - exitPrice;
+        bool isPriceUp = exitPrice > pos.entryPrice;
+        uint64 absDiff = isPriceUp ? exitPrice - pos.entryPrice : pos.entryPrice - exitPrice;
+        
+        // 2. 计算最终结算金额
+        // 基础保证金 = 全部仓位保证金
+        euint64 baseMargin = pos.margin;
+        
+        // 盈亏金额 = 全部BTC数量 * 价格差
+        euint64 pnlAmount = FHE.mul(pos.btcAmount, FHE.asEuint64(absDiff));
+        
+        // 方向判断：多头且上涨 或 空头且下跌 = 盈利
+        ebool isProfit = FHE.eq(pos.isLong, FHE.asEbool(isPriceUp));
+        
+        // 最终结算金额：基础保证金 + 盈亏（盈利为正，亏损为负）
+        euint64 finalSettlement = FHE.select(
+            isProfit, 
+            FHE.add(baseMargin, pnlAmount),  // 盈利：保证金 + 盈利
+            FHE.sub(baseMargin, pnlAmount)   // 亏损：保证金 - 亏损
+        );
 
-        // 5.1 方向正确？（多头且上涨 / 空头且下跌）
-        ebool directionCorrect = FHE.eq(pos.isLong, FHE.asEbool(exitPrice > pos.entryPrice));
+        // 3. 更新用户余额
+        balances[msg.sender].usd = FHE.add(balances[msg.sender].usd, finalSettlement);
+        balances[msg.sender].btc = FHE.sub(balances[msg.sender].btc, pos.btcAmount);
 
-        // 5.2 盈亏金额 = closeableBtcAmount * absDiff
-        euint64 pnlAbs = FHE.mul(closeableBtcAmount, FHE.asEuint64(absDiff));
+        // 4. 清空仓位
+        pos.btcAmount = FHE.asEuint64(0);
+        pos.margin = FHE.asEuint64(0);
 
-        // 5.3 最终盈亏：方向正确则盈利，否则亏损
-        euint64 profit = FHE.select(directionCorrect, pnlAbs, FHE.asEuint64(0));
-        euint64 loss = FHE.select(directionCorrect, FHE.asEuint64(0), pnlAbs);
-        euint64 settlementUsd = FHE.add(closedMargin, profit);
-        settlementUsd = FHE.sub(settlementUsd, loss);
-
-        // 6. 更新用户余额
-        balances[msg.sender].usd = FHE.add(balances[msg.sender].usd, settlementUsd);
-        balances[msg.sender].btc = FHE.sub(balances[msg.sender].btc, closeableBtcAmount);
-
-        // 7. 更新仓位
-        pos.btcAmount = remainingBtc;
-        pos.margin = FHE.sub(pos.margin, closedMargin); // 剩余保证金
+        // 5. 授权处理
         _authorizeHandle(balances[msg.sender].usd);
         _authorizeHandle(balances[msg.sender].btc);
         _authorizeHandle(pos.btcAmount);
