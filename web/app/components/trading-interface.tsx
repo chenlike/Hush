@@ -14,9 +14,20 @@ export function TradingInterface() {
   const [margin, setMargin] = useState('');
   const [isLong, setIsLong] = useState(true);
   const [positionId, setPositionId] = useState('');
+  const [closeBtcAmount, setCloseBtcAmount] = useState(''); // 添加平仓BTC数量状态
   const [fheReady, setFheReady] = useState(false);
   const [fheInitializing, setFheInitializing] = useState(false);
   const [fheFailed, setFheFailed] = useState(false);
+  
+  // 持仓查询相关状态
+  const [queryPositionId, setQueryPositionId] = useState('');
+  const [positionInfo, setPositionInfo] = useState<any>(null);
+  const [isQuerying, setIsQuerying] = useState(false);
+
+  // 辅助函数：将Uint8Array转换为hex字符串
+  const uint8ArrayToHex = (array: Uint8Array): `0x${string}` => {
+    return `0x${Array.from(array).map(b => b.toString(16).padStart(2, '0')).join('')}` as `0x${string}`;
+  };
 
   // 检查用户是否已注册
   const { data: isRegistered } = useContractRead({
@@ -29,16 +40,17 @@ export function TradingInterface() {
     },
   });
 
-  // 获取用户持仓
-  const { data: positionIds } = useContractRead({
-    address: CONTRACTS.TRADER.address,
-    abi: CONTRACTS.TRADER.abi,
-    functionName: 'getPositionIds',
-    args: [],
-    query: {
-      enabled: !!address && !!isRegistered,
-    },
-  });
+  // 获取用户持仓 - 由于合约没有getPositionIds函数，我们需要通过其他方式获取
+  // 这里暂时注释掉，因为合约中没有这个函数
+  // const { data: positionIds } = useContractRead({
+  //   address: CONTRACTS.TRADER.address,
+  //   abi: CONTRACTS.TRADER.abi,
+  //   functionName: 'getPositionIds',
+  //   args: [],
+  //   query: {
+  //     enabled: !!address && !!isRegistered,
+  //   },
+  // });
 
   // 获取当前 BTC 价格
   const { data: btcPrice } = useContractRead({
@@ -56,6 +68,17 @@ export function TradingInterface() {
 
   // 平仓合约调用
   const { writeContract: closePosition, data: closePositionData } = useContractWrite();
+
+  // 持仓查询合约调用
+  const { data: positionData, refetch: refetchPosition } = useContractRead({
+    address: CONTRACTS.TRADER.address,
+    abi: CONTRACTS.TRADER.abi,
+    functionName: 'getPosition',
+    args: queryPositionId ? [BigInt(queryPositionId)] : undefined,
+    query: {
+      enabled: !!queryPositionId,
+    },
+  });
 
   // 等待交易完成
   const { isLoading: isRegistering } = useWaitForTransactionReceipt({
@@ -101,6 +124,7 @@ export function TradingInterface() {
         address: CONTRACTS.TRADER.address,
         abi: CONTRACTS.TRADER.abi,
         functionName: 'register',
+        args: [],
       });
     } catch (error) {
       console.error('注册失败:', error);
@@ -110,41 +134,74 @@ export function TradingInterface() {
   };
 
   const handleOpenPosition = async () => {
-    if (!address || !margin || !fheReady) return;
+    if (!address || !margin || !fheReady) {
+      console.log('开仓前置检查失败:', {
+        address: !!address,
+        margin: !!margin,
+        fheReady: fheReady
+      });
+      return;
+    }
+    
+    if (!isConnected) {
+      console.error('钱包未连接，无法进行交易');
+      return;
+    }
+    
+    console.log("开始开仓流程");
     console.log("address", address);
     console.log("margin", margin);
     console.log("fheReady", fheReady);
+    console.log("isConnected", isConnected);
+    
     setIsLoading(true);
     try {
       // 创建加密输入实例
       const encryptedInput = fheService.createEncryptedInput(CONTRACTS.TRADER.address, address);
       
-      // 添加保证金
-      const marginValue = parseInt(margin);
-      encryptedInput.add32(marginValue);
-      
-      // 添加交易方向
+      // 添加交易方向 (ebool)
       encryptedInput.addBool(isLong);
+      
+      // 添加保证金 (euint64)
+      const marginValue = parseInt(margin);
+      encryptedInput.add64(BigInt(marginValue));
       
       // 加密所有输入
       const encryptedResult = await encryptedInput.encrypt();
       
       console.log('加密结果:', encryptedResult);
+      console.log('加密结果类型:', typeof encryptedResult);
+      console.log('inputProof类型:', typeof encryptedResult.inputProof);
+      console.log('inputProof内容:', encryptedResult.inputProof);
       console.log('保证金值:', marginValue);
       console.log('交易方向:', isLong);
       
-      // 调用开仓合约 - 暂时使用占位符证明
-      openPosition({
+      // 调用开仓合约 - 根据合约函数签名调整参数顺序
+      // openPosition(externalEbool _isLong, externalEuint64 _margin, bytes calldata proof)
+      const isLongHandle = uint8ArrayToHex(encryptedResult.handles[0]);
+      const marginHandle = uint8ArrayToHex(encryptedResult.handles[1]);
+      
+      console.log('准备调用合约，参数:', {
+        address: CONTRACTS.TRADER.address,
+        isLongHandle,
+        marginHandle,
+        proof: encryptedResult.inputProof
+      });
+      
+      let s = openPosition({
         address: CONTRACTS.TRADER.address,
         abi: CONTRACTS.TRADER.abi,
         functionName: 'openPosition',
         args: [
-          `0x${Buffer.from(encryptedResult.handles[0]).toString('hex')}` as `0x${string}`,
-          '0x0000000000000000000000000000000000000000000000000000000000000000' as `0x${string}`, // 占位符证明
-          `0x${Buffer.from(encryptedResult.handles[1]).toString('hex')}` as `0x${string}`,
-          '0x0000000000000000000000000000000000000000000000000000000000000000' as `0x${string}` // 占位符证明
+          isLongHandle, // _isLong
+          marginHandle, // _margin
+          encryptedResult.inputProof as any // proof
         ]
       });
+      console.log("开仓调用完成");
+      
+      // openPosition返回void，所以不需要检查返回值
+      // 实际的交易状态可以通过useWaitForTransactionReceipt来监控
     } catch (error) {
       console.error('开仓失败:', error);
     } finally {
@@ -158,16 +215,61 @@ export function TradingInterface() {
     setFheInitializing(false);
   };
 
+  // 处理持仓查询
+  const handleQueryPosition = async () => {
+    if (!queryPositionId) return;
+    
+    setIsQuerying(true);
+    try {
+      await refetchPosition();
+    } catch (error) {
+      console.error('查询持仓失败:', error);
+    } finally {
+      setIsQuerying(false);
+    }
+  };
+
+  // 当持仓数据更新时，更新状态
+  useEffect(() => {
+    if (positionData) {
+      setPositionInfo(positionData);
+    }
+  }, [positionData]);
+
   const handleClosePosition = async () => {
-    if (!positionId) return;
+    if (!positionId || !address || !fheReady || !closeBtcAmount) return;
     
     try {
-      closePosition({
+      // 创建加密输入实例用于平仓
+      const encryptedInput = fheService.createEncryptedInput(CONTRACTS.TRADER.address, address);
+      
+      // 添加要平仓的BTC数量 (使用用户输入的数量)
+      const closeBtcAmountValue = parseInt(closeBtcAmount);
+      encryptedInput.add64(BigInt(closeBtcAmountValue));
+      
+      // 加密输入
+      const encryptedResult = await encryptedInput.encrypt();
+      
+      console.log('平仓加密结果:', encryptedResult);
+      console.log('平仓inputProof类型:', typeof encryptedResult.inputProof);
+      console.log('平仓inputProof内容:', encryptedResult.inputProof);
+      console.log('平仓BTC数量:', closeBtcAmountValue);
+      
+      // 调用平仓合约 - 根据合约函数签名调整参数
+      // closePosition(uint256 pid, externalEuint64 _btcAmount, bytes calldata proof)
+      const btcAmountHandle = uint8ArrayToHex(encryptedResult.handles[0]);
+      
+      let s = closePosition({
         address: CONTRACTS.TRADER.address,
         abi: CONTRACTS.TRADER.abi,
         functionName: 'closePosition',
-        args: [BigInt(positionId)]
+        args: [
+          BigInt(positionId), // pid
+          btcAmountHandle, // _btcAmount
+          encryptedResult.inputProof as any // proof
+        ]
       });
+      console.log("平仓结果:", s);
     } catch (error) {
       console.error('平仓失败:', error);
     }
@@ -265,14 +367,66 @@ export function TradingInterface() {
               </div>
               <button
                 onClick={handleOpenPosition}
-                disabled={!margin || isOpening || !fheReady || fheFailed}
+                disabled={!margin || isOpening || !fheReady || fheFailed || !isConnected}
                 className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50"
               >
                 {isOpening ? '开仓中...' : 
+                 !isConnected ? '请先连接钱包' :
                  fheFailed ? 'FHE 初始化失败' : 
                  !fheReady ? '等待 FHE 初始化...' : 
                  '开仓'}
               </button>
+            </div>
+          </div>
+
+          <div className="bg-card rounded-lg p-6 shadow-sm">
+            <h2 className="text-2xl font-semibold mb-4">持仓查询</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">持仓 ID</label>
+                <div className="flex space-x-2">
+                  <input
+                    type="number"
+                    value={queryPositionId}
+                    onChange={(e) => setQueryPositionId(e.target.value)}
+                    className="flex-1 px-3 py-2 border rounded-md bg-background"
+                    placeholder="输入持仓 ID"
+                  />
+                  <button
+                    onClick={handleQueryPosition}
+                    disabled={!queryPositionId || isQuerying}
+                    className="px-4 py-2 bg-secondary text-secondary-foreground rounded-md hover:bg-secondary/90 disabled:opacity-50"
+                  >
+                    {isQuerying ? '查询中...' : '查询'}
+                  </button>
+                </div>
+              </div>
+              
+              {positionInfo && (
+                <div className="bg-muted rounded-lg p-4 space-y-2">
+                  <h3 className="font-semibold">持仓信息</h3>
+                  <div className="text-sm space-y-1">
+                    <p>持仓所有者: {positionInfo[0]}</p>
+                    <p>保证金: {positionInfo[1]?.toString() || '加密数据'}</p>
+                    <p>BTC数量: {positionInfo[2]?.toString() || '加密数据'}</p>
+                    <p>开仓价格: ${positionInfo[3]?.toString() || 'N/A'}</p>
+                    <p>交易方向: {positionInfo[4] ? '多头' : '空头'}</p>
+                  </div>
+                  {positionInfo[0] === address && (
+                    <div className="mt-3 pt-3 border-t">
+                      <button
+                        onClick={() => {
+                          setPositionId(queryPositionId);
+                          setCloseBtcAmount('');
+                        }}
+                        className="px-3 py-1 bg-primary text-primary-foreground rounded text-sm hover:bg-primary/90"
+                      >
+                        使用此持仓进行平仓
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
@@ -289,7 +443,18 @@ export function TradingInterface() {
                   placeholder="输入持仓 ID"
                 />
               </div>
-              {positionIds && positionIds.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium mb-2">平仓 BTC 数量</label>
+                <input
+                  type="number"
+                  value={closeBtcAmount}
+                  onChange={(e) => setCloseBtcAmount(e.target.value)}
+                  className="w-full px-3 py-2 border rounded-md bg-background"
+                  placeholder="输入平仓数量"
+                />
+              </div>
+              {/* 暂时注释掉持仓列表，因为合约中没有getPositionIds函数 */}
+              {/* {positionIds && positionIds.length > 0 && (
                 <div>
                   <p className="text-sm text-muted-foreground mb-2">您的持仓:</p>
                   <div className="space-y-1">
@@ -304,13 +469,17 @@ export function TradingInterface() {
                     ))}
                   </div>
                 </div>
-              )}
+              )} */}
               <button
                 onClick={handleClosePosition}
-                disabled={!positionId || isClosing}
+                disabled={!positionId || !closeBtcAmount || isClosing || !fheReady}
                 className="px-4 py-2 bg-destructive text-destructive-foreground rounded-md hover:bg-destructive/90 disabled:opacity-50"
               >
-                {isClosing ? '平仓中...' : '平仓'}
+                {isClosing ? '平仓中...' : 
+                 !fheReady ? '等待 FHE 初始化...' : 
+                 !positionId ? '请输入持仓 ID' :
+                 !closeBtcAmount ? '请输入平仓数量' :
+                 '平仓'}
               </button>
             </div>
           </div>
