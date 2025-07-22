@@ -207,7 +207,7 @@ contract PositionTrader is SepoliaConfig, Ownable {
         // 盈亏 = BTC持仓大小 * 价格变化 / 精度因子
         euint64 pnlAmount = FHE.div(
             FHE.mul(pos.btcSize, FHE.asEuint64(priceChange)),
-            FHE.asEuint64(PRECISION_FACTOR)
+            PRECISION_FACTOR
         );
 
         // 判断是否盈利：多头且价格上涨 或 空头且价格下跌
@@ -303,21 +303,5 @@ contract PositionTrader is SepoliaConfig, Ownable {
         FHE.allow(handle, msg.sender);
     }
 
-    // === 查询合约状态函数 ===
-    function getContractInfo() external view returns (
-        uint64 initialCash,
-        uint64 decimals,
-        uint64 precisionFactor,
-        uint64 minMargin,
-        uint64 maxLeverage,
-        uint256 totalPositions
-    ) {
-        return (
-            INITIAL_CASH_BASE,
-            DECIMALS,
-            PRECISION_FACTOR,
 
-            positionCounter
-        );
-    }
 }
