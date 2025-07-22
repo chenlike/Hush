@@ -78,31 +78,7 @@ contract PositionTrader is SepoliaConfig, Ownable {
         return userPositions[user];
     }
 
-    // === 批量检查用户持仓状态 ===
-    function getUserActivePositions(address user) external view returns (uint256[] memory) {
-        uint256[] memory allPositions = userPositions[user];
-        uint256 activeCount = 0;
 
-        // 首先计算活跃持仓数量
-        for (uint256 i = 0; i < allPositions.length; i++) {
-            if (!isOver(allPositions[i])) {
-                activeCount++;
-            }
-        }
-
-        // 创建活跃持仓数组
-        uint256[] memory activePositions = new uint256[](activeCount);
-        uint256 index = 0;
-
-        for (uint256 i = 0; i < allPositions.length; i++) {
-            if (!isOver(allPositions[i])) {
-                activePositions[index] = allPositions[i];
-                index++;
-            }
-        }
-
-        return activePositions;
-    }
 
     // === 开仓函数 ===
     function openPosition(
