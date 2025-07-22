@@ -141,19 +141,12 @@ contract PositionTrader is SepoliaConfig, Ownable {
         ebool isLong = FHE.fromExternal(_isLong, proof);
         euint64 marginAmount = FHE.fromExternal(_marginAmount, proof);
 
-        // 检查保证金是否满足最小要求
-        euint64 minMarginEncrypted = FHE.asEuint64(MIN_MARGIN);
-        ebool hasEnoughMargin = FHE.ge(marginAmount, minMarginEncrypted);
-
         // 获取用户当前余额
         euint64 currentBalance = balances[msg.sender].usd;
         
         // 检查用户余额是否充足
         ebool hasSufficientBalance = FHE.ge(currentBalance, marginAmount);
-        
-        // 计算实际使用的保证金（如果余额不足或保证金不够最小值，则为0）
-        ebool canOpenPosition = FHE.and(hasEnoughMargin, hasSufficientBalance);
-        euint64 actualMargin = FHE.select(canOpenPosition, marginAmount, FHE.asEuint64(0));
+        euint64 actualMargin = FHE.select(hasSufficientBalance, marginAmount, FHE.asEuint64(0));
 
         // 获取当前BTC价格
         uint64 currentPrice = getAdjustedBtcPrice();
