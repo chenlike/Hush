@@ -43,9 +43,8 @@ export function BalanceDisplay() {
 
     setIsDecrypting(true);
     setHasDecrypted(true);
-
     try {
-      const handles = [String(encryptedBalance[0]),String(encryptedBalance[1])];
+      const handles = [String(encryptedBalance)];
       const results = await fheService.decryptMultipleValuesWithWalletClient(
         handles,
         CONTRACTS.TRADER.address,
@@ -53,10 +52,8 @@ export function BalanceDisplay() {
       );
 console.log(results);
       const cash = results[handles[0]];
-      const btc = results[handles[1]];
       const cashFormatted = (Number(cash) / 1e8).toFixed(2);
-      const btcFormatted = (Number(btc) / 1e8).toFixed(8);
-      setDecryptedBalance(`现金: $${cashFormatted}, BTC: ${btcFormatted}`);
+      setDecryptedBalance(`现金: $${cashFormatted}`);
     } catch (error: any) {
       console.error('解密余额失败:', error);
       if (error.message.includes('user rejected')) {
