@@ -2,14 +2,14 @@
 pragma solidity ^0.8.24;
 
 import {FHE, euint64, externalEuint64, ebool, externalEbool} from "@fhevm/solidity/lib/FHE.sol";
-import { SepoliaConfig } from "@fhevm/solidity/config/ZamaConfig.sol";
+import {SepoliaConfig} from "@fhevm/solidity/config/ZamaConfig.sol";
 import {IPriceOracle} from "./PriceOracle.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract PositionTrader is SepoliaConfig, Ownable {
     address public priceOracleAddress; // 价格预言机地址
     address public revealAddress; // 公布密文结果的存储合约
-    
+
     // === 精度管理常量 ===
     uint64 public constant INITIAL_CASH_BASE = 10_000; // 初始虚拟资金基数
     uint64 public constant DECIMALS = 8; // 小数位数
@@ -19,24 +19,22 @@ contract PositionTrader is SepoliaConfig, Ownable {
         priceOracleAddress = _priceOracle;
     }
 
-
-
     // 持仓结构体
     struct Position {
         address owner;
-        euint64 marginAmount;     // 保证金数量（以USD计，带精度）
-        euint64 btcSize;         // BTC持仓大小（带精度因子）
-        uint64 entryPrice;       // 开仓价格（带精度）
-        ebool isLong;           // 是否多头
-        uint256 openTimestamp;   // 开仓时间戳
+        euint64 marginAmount; // 保证金数量（以USD计，带精度）
+        euint64 btcSize; // BTC持仓大小（带精度因子）
+        uint64 entryPrice; // 开仓价格（带精度）
+        ebool isLong; // 是否多头
+        uint256 openTimestamp; // 开仓时间戳
     }
-    
+
     uint256 private positionCounter; // 持仓编号递增器
     mapping(uint256 => Position) private positions; // 持仓映射
 
     // 用户余额结构体，只存储USD余额（密文）
     struct Balance {
-        euint64 usd;  // USD余额（带精度）
+        euint64 usd; // USD余额（带精度）
     }
 
     mapping(address => bool) public isRegistered; // 是否注册
@@ -69,23 +67,12 @@ contract PositionTrader is SepoliaConfig, Ownable {
         return balances[user].usd;
     }
 
-    function getPosition(uint256 pid) public view returns (
-        address owner,
-        euint64 marginAmount,
-        euint64 btcSize,
-        uint64 entryPrice,
-        ebool isLong
-    ) {
+    function getPosition(
+        uint256 pid
+    ) public view returns (address owner, euint64 marginAmount, euint64 btcSize, uint64 entryPrice, ebool isLong) {
         Position memory position = positions[pid];
-        return (
-            position.owner,
-            position.marginAmount,
-            position.btcSize,
-            position.entryPrice,
-            position.isLong
-        );
+        return (position.owner, position.marginAmount, position.btcSize, position.entryPrice, position.isLong);
     }
-
 
     function getUserPositionIds(address user) external view returns (uint256[] memory) {
         return userPositions[user];
@@ -95,25 +82,25 @@ contract PositionTrader is SepoliaConfig, Ownable {
     function getUserActivePositions(address user) external view returns (uint256[] memory) {
         uint256[] memory allPositions = userPositions[user];
         uint256 activeCount = 0;
-        
+
         // 首先计算活跃持仓数量
         for (uint256 i = 0; i < allPositions.length; i++) {
             if (!isOver(allPositions[i])) {
                 activeCount++;
             }
         }
-        
+
         // 创建活跃持仓数组
         uint256[] memory activePositions = new uint256[](activeCount);
         uint256 index = 0;
-        
+
         for (uint256 i = 0; i < allPositions.length; i++) {
             if (!isOver(allPositions[i])) {
                 activePositions[index] = allPositions[i];
                 index++;
             }
         }
-        
+
         return activePositions;
     }
 
@@ -131,7 +118,7 @@ contract PositionTrader is SepoliaConfig, Ownable {
 
         // 获取用户当前余额
         euint64 currentBalance = balances[msg.sender].usd;
-        
+
         // 检查用户余额是否充足
         ebool hasSufficientBalance = FHE.ge(currentBalance, marginAmount);
         euint64 actualMargin = FHE.select(hasSufficientBalance, marginAmount, FHE.asEuint64(0));
@@ -142,10 +129,7 @@ contract PositionTrader is SepoliaConfig, Ownable {
 
         // 计算BTC持仓大小：(保证金 * 精度因子) / 价格
         // 这样保持了精度的一致性
-        euint64 btcSize = FHE.div(
-            FHE.mul(actualMargin, FHE.asEuint64(PRECISION_FACTOR)),
-            currentPrice
-        );
+        euint64 btcSize = FHE.div(FHE.mul(actualMargin, FHE.asEuint64(PRECISION_FACTOR)), currentPrice);
 
         // 扣减用户余额
         balances[msg.sender].usd = FHE.sub(currentBalance, actualMargin);
@@ -174,74 +158,69 @@ contract PositionTrader is SepoliaConfig, Ownable {
         return positionCounter;
     }
 
-    // === 平仓函数 ===
-    function closePosition(uint256 pid,externalEuint64 _btcAmount,bytes calldata proof) external {
+    /**
+     * @param pid               持仓编号
+     * @param _btcAmount        本次想平仓的 BTC 数量（明文，带 1e8 精度）
+     * @param proof             zk-proof
+     */
+    function closePosition(uint256 pid, externalEuint64 _btcAmount, bytes calldata proof) external {
         Position storage pos = positions[pid];
         require(pos.owner == msg.sender, "Not position owner");
-        require(!isOver(pid), "Position is already over");
 
-        // 获取当前价格
+        // 1. 解密用户输入的平仓数量
+        euint64 closeBtcAmountEnc = FHE.fromExternal(_btcAmount, proof);
+
+        // 2. 读取当前剩余仓位
+        euint64 remainBtcEnc = pos.btcSize;
+        euint64 remainMarginEnc = pos.marginAmount;
+
+        // 3. 不能超仓
+        euint64 actualCloseBtcEnc = FHE.min(remainBtcEnc, closeBtcAmountEnc);
+
+        // 4. 计算本次平仓所占比例：ratio = actualClose / remainBtc
+        //    由于 FHE 没有 euint64 除法返回小数，我们采用“交叉相乘”思想：
+        //    closeMargin = remainMargin * actualCloseBtc / remainBtc
+        euint64 closeMarginEnc = FHE.div(FHE.mul(remainMarginEnc, actualCloseBtcEnc), remainBtcEnc);
+
+        // 5. 更新仓位数据：剩余数量 = 原值 - 本次平仓数量
+        pos.btcSize = FHE.sub(remainBtcEnc, actualCloseBtcEnc);
+        pos.marginAmount = FHE.sub(remainMarginEnc, closeMarginEnc);
+
+        // 6. 计算盈亏
         uint64 exitPrice = getAdjustedBtcPrice();
         require(exitPrice > 0, "Invalid exit price");
 
-        // 计算价格变化
         uint64 entryPrice = pos.entryPrice;
-        bool isPriceUp = exitPrice > entryPrice;
-        uint64 priceChange = isPriceUp ? exitPrice - entryPrice : entryPrice - exitPrice;
+        uint64 priceChange = exitPrice > entryPrice ? exitPrice - entryPrice : entryPrice - exitPrice;
 
+        euint64 pnlAmountEnc = FHE.div(FHE.mul(actualCloseBtcEnc, FHE.asEuint64(priceChange)), PRECISION_FACTOR);
 
-        euint64 closeBtcAmount = FHE.mul(FHE.fromExternal(_btcAmount, proof),FHE.asEuint64(PRECISION_FACTOR));
-        
+        ebool isProfit = FHE.eq(pos.isLong, FHE.asEbool(exitPrice > entryPrice));
 
-        // 计算盈亏金额
-        // 盈亏 = BTC持仓大小 * 价格变化 / 精度因子
-        euint64 pnlAmount = FHE.div(
-            FHE.mul(closeBtcAmount, FHE.asEuint64(priceChange)),
-            PRECISION_FACTOR
+        // 7. 最终结算金额
+        euint64 settleEnc = FHE.select(
+            isProfit,
+            FHE.add(closeMarginEnc, pnlAmountEnc),
+            // 亏损不能使结算金额变负
+            FHE.select(FHE.gt(pnlAmountEnc, closeMarginEnc), FHE.asEuint64(0), FHE.sub(closeMarginEnc, pnlAmountEnc))
         );
 
-        // 判断是否盈利：多头且价格上涨 或 空头且价格下跌
-        ebool isProfit = FHE.eq(pos.isLong, FHE.asEbool(isPriceUp));
+        // 8. 更新用户余额
+        balances[msg.sender].usd = FHE.add(balances[msg.sender].usd, settleEnc);
 
-        // 计算最终结算金额
-        euint64 baseMargin = pos.marginAmount;
-        
-        // 为了避免下溢出，我们需要检查亏损是否超过保证金
-        ebool lossExceedsMargin = FHE.and(
-            FHE.not(isProfit), // 是亏损
-            FHE.gt(pnlAmount, baseMargin) // 亏损大于保证金
-        );
-        
-        // 如果亏损超过保证金，最终结算为0；否则正常计算
-        euint64 finalSettlement = FHE.select(
-            lossExceedsMargin,
-            FHE.asEuint64(0), // 亏损超过保证金，结算为0
-            FHE.select(
-                isProfit,
-                FHE.add(baseMargin, pnlAmount), // 盈利：保证金 + 盈利
-                FHE.sub(baseMargin, pnlAmount)  // 亏损：保证金 - 亏损
-            )
-        );
-
-        // 更新用户余额
-        balances[msg.sender].usd = FHE.add(balances[msg.sender].usd, finalSettlement);
-
-        // 关闭持仓
-        pos.marginAmount = FHE.asEuint64(0);
-        pos.btcSize = FHE.asEuint64(0);
-
-        // 授权处理
-        _authorizeHandle(balances[msg.sender].usd);
-        _authorizeHandle(pos.marginAmount);
+        // 10. 授权
         _authorizeHandle(pos.btcSize);
+        _authorizeHandle(pos.marginAmount);
+        _authorizeHandle(balances[msg.sender].usd);
 
+        // 11. 事件（如果需要把明文数量返回给前端，可额外 emit）
         emit PositionClosed(msg.sender, pid, exitPrice);
     }
 
     // === 价格获取函数 ===
     function getAdjustedBtcPrice() public view returns (uint64) {
         uint256 price = IPriceOracle(priceOracleAddress).getLatestBtcPrice();
-        
+
         // 确保价格预言机的精度与合约精度一致
         require(IPriceOracle(priceOracleAddress).getDecimals() == DECIMALS, "Price oracle decimal mismatch");
         require(price > 0, "Invalid price from oracle");
@@ -271,6 +250,4 @@ contract PositionTrader is SepoliaConfig, Ownable {
         FHE.allowThis(handle);
         FHE.allow(handle, msg.sender);
     }
-
-
 }
