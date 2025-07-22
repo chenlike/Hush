@@ -173,6 +173,7 @@ export function TradingInterface() {
       // 添加保证金 (euint64) - 转换为合约的小数格式 (8位小数)
       const marginValue = parseInt(margin);
       const marginWithDecimals = marginValue * 1e8; // 转换为8位小数格式
+      console.log("marginWithDecimals", marginWithDecimals);
       encryptedInput.add64(BigInt(marginWithDecimals));
       
       // 加密所有输入
@@ -258,7 +259,7 @@ export function TradingInterface() {
       const isLongHandle = String(positionInfo[4]);
 
 
-      const handles = [ btcAmountHandle, isLongHandle];
+      const handles = [ marginHandle,btcAmountHandle, isLongHandle];
       console.log("handles", handles);
       const results = await fheService.decryptMultipleValuesWithWalletClient(
         handles,
@@ -268,17 +269,19 @@ export function TradingInterface() {
 
       console.log('持仓解密结果:', results);
 
-      // const margin = results[marginHandle];
+      const margin = results[marginHandle];
       const btcAmount = results[btcAmountHandle];
       const isLong = results[isLongHandle];
-
+      console.log("margin", margin);
+      console.log("btcAmount", btcAmount);
+      console.log("isLong", isLong);  
       // 格式化显示 - 保证金使用2位小数，BTC数量使用8位小数
-      // const marginFormatted = (Number(margin) / 1e8).toFixed(2);
+      const marginFormatted = (Number(margin) / 1e8).toFixed(2);
       const btcAmountFormatted = (Number(btcAmount) / 1e8).toFixed(8);
 
       setDecryptedPositionInfo({
         owner: positionInfo[0],
-        margin: "nope",
+        margin: marginFormatted,
         btcAmount: btcAmountFormatted,
         entryPrice: positionInfo[3]?.toString() || 'N/A',
         isLong: isLong
@@ -299,34 +302,16 @@ export function TradingInterface() {
     if (!positionId || !address || !fheReady || !closeBtcAmount) return;
     
     try {
-      // 创建加密输入实例用于平仓
-      const encryptedInput = fheService.createEncryptedInput(CONTRACTS.TRADER.address, address);
-      
-      // 添加要平仓的BTC数量 (使用用户输入的数量) - 转换为合约的小数格式 (8位小数)
-      const closeBtcAmountValue = parseFloat(closeBtcAmount);
-      const closeBtcAmountWithDecimals = Math.floor(closeBtcAmountValue * 1e8); // 转换为8位小数格式
-      encryptedInput.add64(BigInt(closeBtcAmountWithDecimals));
-      
-      // 加密输入
-      const encryptedResult = await encryptedInput.encrypt();
-      
-      console.log('平仓加密结果:', encryptedResult);
-      console.log('平仓inputProof类型:', typeof encryptedResult.inputProof);
-      console.log('平仓inputProof内容:', encryptedResult.inputProof);
-      console.log('平仓BTC数量:', closeBtcAmountValue);
+
       
       // 调用平仓合约 - 根据合约函数签名调整参数
-      // closePosition(uint256 pid, externalEuint64 _btcAmount, bytes calldata proof)
-      const btcAmountHandle = uint8ArrayToHex(encryptedResult.handles[0]);
-      
+
       let s = closePosition({
         address: CONTRACTS.TRADER.address,
         abi: CONTRACTS.TRADER.abi,
         functionName: 'closePosition',
         args: [
-          BigInt(positionId), // pid
-          btcAmountHandle, // _btcAmount
-          hexlify(encryptedResult.inputProof) as any // proof
+          BigInt(positionId)
         ]
       });
       console.log("平仓结果:", s);
