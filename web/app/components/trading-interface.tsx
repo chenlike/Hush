@@ -326,7 +326,7 @@ export function TradingInterface() {
         args: [
           BigInt(positionId), // pid
           btcAmountHandle, // _btcAmount
-          encryptedResult.inputProof as any // proof
+          hexlify(encryptedResult.inputProof) as any // proof
         ]
       });
       console.log("平仓结果:", s);
