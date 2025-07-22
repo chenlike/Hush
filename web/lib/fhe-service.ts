@@ -68,7 +68,7 @@ export class FHEService {
           console.warn("切换网络失败，可能已在其它网络：", switchError);
         }
       }
-
+console.log(SepoliaConfig);
       const config = { ...SepoliaConfig, network: window.ethereum };
       fheInstance = await createInstance(config);
 
@@ -189,7 +189,6 @@ export class FHEService {
       startTimestamp,
       durationDays
     );
-
     // 3. 使用 WalletClient 签名
     const signature = await walletClient.signTypedData({
       account: walletClient.account,
@@ -197,14 +196,14 @@ export class FHEService {
         ...eip712.domain,
         verifyingContract: eip712.domain.verifyingContract as `0x${string}`,
       },
-      types: { UserDecryptRequestVerification: eip712.types.UserDecryptRequestVerification },
+      types: eip712.types,
       primaryType: 'UserDecryptRequestVerification',
       message: eip712.message,
     });
     
     // 去除 0x 前缀
     const sig = signature.replace(/^0x/, "");
-
+console.log(sig,'???');
     // 4. 调用 FHEVM SDK 进行解密
     const handlePairs = handles.map(handle => ({ handle, contractAddress }));
     const results = await instance.userDecrypt(

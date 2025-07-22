@@ -45,13 +45,13 @@ export function BalanceDisplay() {
     setHasDecrypted(true);
 
     try {
-      const handles = [String(encryptedBalance[0]), String(encryptedBalance[1])];
+      const handles = [String(encryptedBalance[0]),String(encryptedBalance[1])];
       const results = await fheService.decryptMultipleValuesWithWalletClient(
         handles,
         CONTRACTS.TRADER.address,
         walletClient
       );
-
+console.log(results);
       const cash = results[handles[0]];
       const btc = results[handles[1]];
       const cashFormatted = (Number(cash) / 1e8).toFixed(2);
