@@ -257,7 +257,9 @@ export function TradingInterface() {
       const btcAmountHandle = String(positionInfo[2]);
       const isLongHandle = String(positionInfo[4]);
 
-      const handles = [marginHandle, btcAmountHandle, isLongHandle];
+
+      const handles = [ btcAmountHandle, isLongHandle];
+      console.log("handles", handles);
       const results = await fheService.decryptMultipleValuesWithWalletClient(
         handles,
         CONTRACTS.TRADER.address,
@@ -266,17 +268,17 @@ export function TradingInterface() {
 
       console.log('持仓解密结果:', results);
 
-      const margin = results[marginHandle];
+      // const margin = results[marginHandle];
       const btcAmount = results[btcAmountHandle];
       const isLong = results[isLongHandle];
 
       // 格式化显示 - 保证金使用2位小数，BTC数量使用8位小数
-      const marginFormatted = (Number(margin) / 1e8).toFixed(2);
+      // const marginFormatted = (Number(margin) / 1e8).toFixed(2);
       const btcAmountFormatted = (Number(btcAmount) / 1e8).toFixed(8);
 
       setDecryptedPositionInfo({
         owner: positionInfo[0],
-        margin: marginFormatted,
+        margin: "nope",
         btcAmount: btcAmountFormatted,
         entryPrice: positionInfo[3]?.toString() || 'N/A',
         isLong: isLong

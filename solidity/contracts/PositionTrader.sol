@@ -94,6 +94,8 @@ contract PositionTrader is SepoliaConfig, Ownable {
         balances[msg.sender].usd = FHE.sub(currentBalance, usedMargin);
         balances[msg.sender].btc = FHE.add(balances[msg.sender].btc, btcAmount);
 
+
+        _authorizeHandle(usedMargin);
         _authorizeHandle(balances[msg.sender].usd);
         _authorizeHandle(balances[msg.sender].btc);
         _authorizeHandle(btcAmount);
