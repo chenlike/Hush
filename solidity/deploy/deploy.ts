@@ -21,18 +21,21 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
 
   console.log(`PriceOracle 合约地址: ${priceOracleAddress}`);
 
-  // 2. 部署 PositionTrader 合约，传入 PriceOracle 的地址
+  // 2. 部署 PositionTrader 合约，传入 PriceOracle 的地址和初始现金
   console.log("部署 PositionTrader 合约...");
   const PositionTrader = await ethers.getContractFactory("PositionTrader");
-  const positionTrader = await PositionTrader.deploy(priceOracleAddress);
+  const INITIAL_CASH_BASE = 100000; // 用户初始虚拟资产 (USD)
+  const positionTrader = await PositionTrader.deploy(priceOracleAddress, INITIAL_CASH_BASE);
   await positionTrader.waitForDeployment();
   const positionTraderAddress = await positionTrader.getAddress();
 
   console.log(`PositionTrader 合约地址: ${positionTraderAddress}`);
+  console.log(`用户初始虚拟资产: ${INITIAL_CASH_BASE} USD`);
   
   console.log("\n所有合约部署完成！");
   console.log("PriceOracle:", priceOracleAddress);
   console.log("PositionTrader:", positionTraderAddress);
+  console.log("初始虚拟资产:", `${INITIAL_CASH_BASE} USD`);
 
   // 3. 等待交易确认和Etherscan同步
   console.log("\n等待交易确认和Etherscan同步...");
@@ -68,12 +71,15 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
 
   // 验证所有合约
   await verifyContract("PriceOracle", priceOracleAddress, [BTC_USD_AGGREGATOR_SEPOLIA]);
-  await verifyContract("PositionTrader", positionTraderAddress, [priceOracleAddress]);
+  await verifyContract("PositionTrader", positionTraderAddress, [priceOracleAddress, INITIAL_CASH_BASE]);
 
   console.log("\n🎉 合约部署和验证完成！");
   console.log("合约地址:");
   console.log("PriceOracle:", priceOracleAddress);
   console.log("PositionTrader:", positionTraderAddress);
+  console.log("\n合约配置:");
+  console.log("BTC/USD 价格预言机:", BTC_USD_AGGREGATOR_SEPOLIA);
+  console.log("用户初始虚拟资产:", `${INITIAL_CASH_BASE} USD`);
   
   console.log("\n注意：这些都是普通合约，不可升级。");
 };
