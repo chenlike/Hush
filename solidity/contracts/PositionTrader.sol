@@ -6,201 +6,445 @@ import {SepoliaConfig} from "@fhevm/solidity/config/ZamaConfig.sol";
 import {IPriceOracle} from "./PriceOracle.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-/// @title 仅支持 1 倍杠杆的 FHE 永续合约交易合约
-/// @notice 每张合约面值固定为 1 美元，BTC 头寸精确到 satoshi，所有金额处理为密文
+/**
+ * @title FHE 永续合约交易合约
+ * @author Your Name
+ * @notice 支持 1 倍杠杆的全密态永续合约交易
+ * @dev 每张合约面值固定为 1 美元，BTC 头寸精确到 satoshi
+ */
 contract PositionTrader is SepoliaConfig, Ownable {
+    
+    // ============================
+    // 常量定义
+    // ============================
+    
+    uint64 public constant INITIAL_CASH_BASE = 10_000; // 初始虚拟资产 (USD)
+    uint64 public constant CONTRACT_USD_VALUE = 1;     // 每张合约价值 (USD)
+    uint64 public constant BTC_PRECISION = 1e8;        // BTC 精度 (satoshi)
+    uint256 public constant CALCULATION_PRECISION = 1e8; // 计算精度
+    
+    // ============================
+    // 状态变量
+    // ============================
+    
     address public priceOracleAddress;
     address public revealAddress;
-
-    // === 精度与杠杆设置 ===
-    uint64 public constant INITIAL_CASH_BASE = 10_000; // 初始虚拟资产，单位 USD
-    uint64 public constant CONTRACT_USD = 1; // 每张合约固定价值 1 USD
-    uint64 public constant BTC_PRECISION = 1e8; // BTC 精度（satoshi）
-
-    constructor(address _priceOracle) Ownable(msg.sender) {
+    
+    uint256 private _positionCounter;
+    
+    // ============================
+    // 数据结构
+    // ============================
+    
+    struct Position {
+        address owner;           // 持仓所有者
+        euint64 contractCount;   // 合约张数
+        euint64 btcSize;        // BTC 持仓大小 (satoshi)
+        uint64 entryPrice;      // 开仓价格 (USD/BTC)
+        ebool isLong;           // 多头/空头标识
+        uint256 openTimestamp;  // 开仓时间戳
+    }
+    
+    struct Balance {
+        euint64 usd; // USD 余额（密文）
+    }
+    
+    // ============================
+    // 映射存储
+    // ============================
+    
+    mapping(uint256 => Position) private _positions;
+    mapping(address => Balance) private _balances;
+    mapping(address => bool) public isRegistered;
+    mapping(address => uint256[]) private _userPositions;
+    
+    // ============================
+    // 事件定义
+    // ============================
+    
+    event UserRegistered(address indexed user);
+    event PositionOpened(
+        address indexed user, 
+        uint256 indexed positionId, 
+        uint64 entryPrice,
+        uint256 timestamp
+    );
+    event PositionClosed(
+        address indexed user, 
+        uint256 indexed positionId, 
+        uint64 exitPrice,
+        uint256 timestamp
+    );
+    event PriceOracleUpdated(address indexed oldOracle, address indexed newOracle);
+    event RevealAddressUpdated(address indexed oldReveal, address indexed newReveal);
+    
+    // ============================
+    // 修饰符
+    // ============================
+    
+    modifier onlyRegistered() {
+        require(isRegistered[msg.sender], "User not registered");
+        _;
+    }
+    
+    modifier validPositionOwner(uint256 positionId) {
+        require(_positions[positionId].owner == msg.sender, "Not position owner");
+        _;
+    }
+    
+    modifier validAddress(address addr) {
+        require(addr != address(0), "Invalid zero address");
+        _;
+    }
+    
+    // ============================
+    // 构造函数
+    // ============================
+    
+    constructor(address _priceOracle) 
+        Ownable(msg.sender) 
+        validAddress(_priceOracle) 
+    {
         priceOracleAddress = _priceOracle;
     }
-
-    struct Position {
-        address owner;
-        euint64 contractCount; // 合约张数
-        euint64 btcSize; // 持仓 BTC 大小（satoshi）
-        uint64 entryPrice; // 开仓时价格（USD/BTC）
-        ebool isLong; // 多/空头
-        uint256 openTimestamp; // 开仓时间
-    }
-
-    uint256 private positionCounter;
-    mapping(uint256 => Position) private positions;
-
-    struct Balance {
-        euint64 usd; // 用户 USD 余额（密文）
-    }
-
-    mapping(address => bool) public isRegistered;
-    mapping(address => Balance) private balances;
-    mapping(address => uint256[]) private userPositions;
-
-    // === 事件定义 ===
-    event UserRegistered(address indexed user);
-    event PositionOpened(address indexed user, uint256 indexed positionId, uint64 entryPrice);
-    event PositionClosed(address indexed user, uint256 indexed positionId, uint64 exitPrice);
-
-    /// @notice 注册新用户，初始化虚拟资产
+    
+    // ============================
+    // 用户管理
+    // ============================
+    
+    /**
+     * @notice 注册新用户并分配初始虚拟资产
+     * @dev 每个地址只能注册一次
+     */
     function register() external {
         require(!isRegistered[msg.sender], "User already registered");
-
-        euint64 init = FHE.asEuint64(INITIAL_CASH_BASE);
-        _authorizeHandle(init);
-
-        balances[msg.sender] = Balance({usd: init});
+        
+        euint64 initialBalance = FHE.asEuint64(INITIAL_CASH_BASE);
+        _authorizeHandle(initialBalance);
+        
+        _balances[msg.sender] = Balance({usd: initialBalance});
         isRegistered[msg.sender] = true;
+        
         emit UserRegistered(msg.sender);
     }
-
-    /// @notice 获取用户余额（密文）
-    function getBalance(address user) public view returns (euint64) {
-        require(isRegistered[user], "Not registered");
-        return balances[user].usd;
+    
+    // ============================
+    // 查询功能
+    // ============================
+    
+    /**
+     * @notice 获取用户 USD 余额（密文）
+     * @param user 用户地址
+     * @return 用户的 USD 余额
+     */
+    function getBalance(address user) external view returns (euint64) {
+        require(isRegistered[user], "User not registered");
+        return _balances[user].usd;
     }
-
-    /// @notice 获取单个持仓信息
-    function getPosition(uint256 pid) public view returns (address, euint64, euint64, uint64, ebool) {
-        Position memory p = positions[pid];
-        return (p.owner, p.contractCount, p.btcSize, p.entryPrice, p.isLong);
+    
+    /**
+     * @notice 获取特定持仓信息
+     * @param positionId 持仓 ID
+     * @return 持仓的详细信息
+     */
+    function getPosition(uint256 positionId) 
+        external 
+        view 
+        returns (
+            address owner,
+            euint64 contractCount,
+            euint64 btcSize,
+            uint64 entryPrice,
+            ebool isLong
+        ) 
+    {
+        Position memory pos = _positions[positionId];
+        return (pos.owner, pos.contractCount, pos.btcSize, pos.entryPrice, pos.isLong);
     }
-
-    /// @notice 获取用户所有持仓编号
+    
+    /**
+     * @notice 获取用户所有持仓 ID
+     * @param user 用户地址
+     * @return 持仓 ID 数组
+     */
     function getUserPositionIds(address user) external view returns (uint256[] memory) {
-        return userPositions[user];
+        return _userPositions[user];
     }
-
-    /// @notice 开仓（固定 1 倍杠杆）
+    
+    /**
+     * @notice 获取当前 BTC 价格
+     * @return 调整后的 BTC 价格
+     */
+    function getCurrentBtcPrice() external view returns (uint64) {
+        return _getAdjustedBtcPrice();
+    }
+    
+    // ============================
+    // 交易功能
+    // ============================
+    
+    /**
+     * @notice 开仓操作（1倍杠杆）
+     * @param _isLong 是否做多（密文）
+     * @param _usdAmount 投入的 USD 金额（密文）
+     * @param proof 零知识证明
+     * @return positionId 新建持仓的 ID
+     */
     function openPosition(
         externalEbool _isLong,
         externalEuint64 _usdAmount,
         bytes calldata proof
-    ) external returns (uint256) {
-        require(isRegistered[msg.sender], "Not registered");
-
+    ) external onlyRegistered returns (uint256 positionId) {
+        
+        // 解密输入参数
         ebool isLong = FHE.fromExternal(_isLong, proof);
-        euint64 usdAmount = FHE.fromExternal(_usdAmount, proof); // 用户想要投入的USD数量
-
-        // 获取当前价格
-        uint64 price = getAdjustedBtcPrice();
-
-        // 计算对应的BTC数量 = USD数量 × BTC精度 / 价格
-        euint64 btcSize = FHE.div(FHE.mul(usdAmount, FHE.asEuint64(BTC_PRECISION)), price);
-
-        // 计算合约张数 = USD数量（因为每张合约固定价值1USD）
-        euint64 contractCount = usdAmount;
-
-        // 检查余额是否充足
-        euint64 balance = balances[msg.sender].usd;
-        ebool sufficient = FHE.ge(balance, usdAmount);
-        euint64 actualUsd = FHE.select(sufficient, usdAmount, FHE.asEuint64(0));
-        euint64 actualBtcSize = FHE.select(sufficient, btcSize, FHE.asEuint64(0));
-        euint64 actualContractCount = FHE.select(sufficient, contractCount, FHE.asEuint64(0));
-
-        // 扣除余额
-        balances[msg.sender].usd = FHE.sub(balance, actualUsd);
-
-        _authorizeHandle(actualUsd);
-        _authorizeHandle(actualContractCount);
-        _authorizeHandle(actualBtcSize);
-        _authorizeHandle(isLong);
-        _authorizeHandle(balances[msg.sender].usd);
-
-        positionCounter++;
-        positions[positionCounter] = Position({
+        euint64 usdAmount = FHE.fromExternal(_usdAmount, proof);
+        
+        // 获取当前价格并计算持仓参数
+        uint64 currentPrice = _getAdjustedBtcPrice();
+        euint64 btcSize = _calculateBtcSize(usdAmount, currentPrice);
+        euint64 contractCount = usdAmount; // 1 USD = 1 张合约
+        
+        // 验证并扣除余额
+        _validateAndDeductBalance(usdAmount);
+        
+        // 创建新持仓
+        positionId = _createPosition(isLong, contractCount, btcSize, currentPrice);
+        
+        emit PositionOpened(msg.sender, positionId, currentPrice, block.timestamp);
+    }
+    
+    /**
+     * @notice 平仓操作（部分或全部）
+     * @param positionId 持仓 ID
+     * @param _usdValue 平仓金额（密文）
+     * @param proof 零知识证明
+     */
+    function closePosition(
+        uint256 positionId, 
+        externalEuint64 _usdValue, 
+        bytes calldata proof
+    ) external validPositionOwner(positionId) {
+        
+        euint64 usdValue = FHE.fromExternal(_usdValue, proof);
+        Position storage pos = _positions[positionId];
+        
+        // 验证平仓金额有效性
+        ebool validClose = FHE.le(usdValue, pos.contractCount);
+        euint64 actualAmount = FHE.select(validClose, usdValue, FHE.asEuint64(0));
+        
+        // 计算盈亏和退还金额
+        uint64 currentPrice = _getAdjustedBtcPrice();
+        euint64 finalValue = _calculatePnL(pos, actualAmount, currentPrice);
+        
+        // 更新持仓状态
+        _updatePositionAfterClose(pos, actualAmount, currentPrice);
+        
+        // 返还资金到用户余额
+        _balances[msg.sender].usd = FHE.add(_balances[msg.sender].usd, finalValue);
+        _authorizeHandle(_balances[msg.sender].usd);
+        
+        emit PositionClosed(msg.sender, positionId, currentPrice, block.timestamp);
+    }
+    
+    // ============================
+    // 内部辅助函数
+    // ============================
+    
+    /**
+     * @notice 计算 BTC 持仓大小
+     */
+    function _calculateBtcSize(euint64 usdAmount, uint64 price) 
+        private  
+        returns (euint64) 
+    {
+        return FHE.div(
+            FHE.mul(usdAmount, FHE.asEuint64(BTC_PRECISION)), 
+            price
+        );
+    }
+    
+    /**
+     * @notice 验证并扣除用户余额
+     */
+    function _validateAndDeductBalance(euint64 amount) private {
+        euint64 currentBalance = _balances[msg.sender].usd;
+        ebool sufficientBalance = FHE.ge(currentBalance, amount);
+        
+        euint64 actualAmount = FHE.select(sufficientBalance, amount, FHE.asEuint64(0));
+        _balances[msg.sender].usd = FHE.sub(currentBalance, actualAmount);
+        
+        _authorizeHandle(_balances[msg.sender].usd);
+    }
+    
+    /**
+     * @notice 创建新持仓
+     */
+    function _createPosition(
+        ebool isLong,
+        euint64 contractCount,
+        euint64 btcSize,
+        uint64 entryPrice
+    ) private returns (uint256 positionId) {
+        
+        positionId = ++_positionCounter;
+        
+        _positions[positionId] = Position({
             owner: msg.sender,
-            contractCount: actualContractCount,
-            btcSize: actualBtcSize,
-            entryPrice: price,
+            contractCount: contractCount,
+            btcSize: btcSize,
+            entryPrice: entryPrice,
             isLong: isLong,
             openTimestamp: block.timestamp
         });
-
-        userPositions[msg.sender].push(positionCounter);
-        emit PositionOpened(msg.sender, positionCounter, price);
-        return positionCounter;
+        
+        _userPositions[msg.sender].push(positionId);
+        
+        // 授权访问权限
+        _authorizeHandle(contractCount);
+        _authorizeHandle(btcSize);
+        _authorizeHandle(isLong);
     }
-
-    /// @notice 平仓（部分或全部）
-    function closePosition(uint256 pid, externalEuint64 _usdValue, bytes calldata proof) external {
-        Position storage pos = positions[pid];
-        require(pos.owner == msg.sender, "Not owner");
-
-        // 解密输入的 USD 平仓金额（密文）
-        euint64 usdValue = FHE.fromExternal(_usdValue, proof);
-
-        // 验证平仓金额不超过持仓合约张数
-        ebool validClose = FHE.le(usdValue, pos.contractCount);
-        euint64 actualAmount = FHE.select(validClose, usdValue, FHE.asEuint64(0));
-
-        // 获取当前价格和开仓价
-        uint64 currentPrice = getAdjustedBtcPrice();
-        uint64 entry = pos.entryPrice;
-
-        // === 计算做多回报 ===
-        euint64 longValue = FHE.div(FHE.mul(actualAmount, FHE.asEuint64(currentPrice)), entry);
-
-        // === 计算做空回报，加入明文判断逻辑 ===
-        uint64 shortNumerator = currentPrice <= 2 * entry ? (2 * entry - currentPrice) : 0;
-        euint64 shortValue = shortNumerator > 0
-            ? FHE.div(FHE.mul(actualAmount, FHE.asEuint64(shortNumerator)), entry)
-            : FHE.asEuint64(0);
-
-        // === 根据多/空头方向决定最终收益 ===
-        euint64 closeValue = FHE.select(pos.isLong, longValue, shortValue);
-
-        // === 计算平仓 BTC 数量（按原始开仓价换算） ===
-        euint64 closeBtcSize = FHE.div(FHE.mul(actualAmount, FHE.asEuint64(BTC_PRECISION)), entry);
-
-        // === 更新持仓信息 ===
-        pos.contractCount = FHE.sub(pos.contractCount, actualAmount);
+    
+    /**
+     * @notice 计算盈亏
+     */
+    function _calculatePnL(
+        Position memory pos, 
+        euint64 amount, 
+        uint64 currentPrice
+    ) private returns (euint64) {
+        
+        euint64 longPnL = _calculateLongPnL(amount, pos.entryPrice, currentPrice);
+        euint64 shortPnL = _calculateShortPnL(amount, pos.entryPrice, currentPrice);
+        
+        return FHE.select(pos.isLong, longPnL, shortPnL);
+    }
+    
+    /**
+     * @notice 计算做多盈亏
+     */
+    function _calculateLongPnL(
+        euint64 amount, 
+        uint64 entryPrice, 
+        uint64 currentPrice
+    ) private returns (euint64) {
+        
+        uint256 priceRatio = (uint256(currentPrice) * CALCULATION_PRECISION) / uint256(entryPrice);
+        
+        return FHE.div(
+            FHE.mul(amount, FHE.asEuint64(uint64(priceRatio))), 
+            uint64(CALCULATION_PRECISION)
+        );
+    }
+    
+    /**
+     * @notice 计算做空盈亏
+     */
+    function _calculateShortPnL(
+        euint64 amount, 
+        uint64 entryPrice, 
+        uint64 currentPrice
+    ) private returns (euint64) {
+        
+        if (currentPrice <= entryPrice) {
+            // 做空盈利
+            uint256 priceDiff = uint256(entryPrice - currentPrice);
+            uint256 profitRatio = (priceDiff * CALCULATION_PRECISION) / uint256(entryPrice);
+            
+            euint64 profit = FHE.div(
+                FHE.mul(amount, FHE.asEuint64(uint64(profitRatio))), 
+                uint64(CALCULATION_PRECISION)
+            );
+            
+            return FHE.add(amount, profit);
+        } else {
+            // 做空亏损
+            uint256 lossRatio = (uint256(entryPrice) * CALCULATION_PRECISION) / uint256(currentPrice);
+            
+            return FHE.div(
+                FHE.mul(amount, FHE.asEuint64(uint64(lossRatio))), 
+                uint64(CALCULATION_PRECISION)
+            );
+        }
+    }
+    
+    /**
+     * @notice 平仓后更新持仓状态
+     */
+    function _updatePositionAfterClose(
+        Position storage pos, 
+        euint64 closeAmount, 
+        uint64 currentPrice
+    ) private {
+        
+        euint64 closeBtcSize = FHE.div(
+            FHE.mul(closeAmount, FHE.asEuint64(BTC_PRECISION)), 
+            pos.entryPrice
+        );
+        
+        pos.contractCount = FHE.sub(pos.contractCount, closeAmount);
         pos.btcSize = FHE.sub(pos.btcSize, closeBtcSize);
-
-        // === 返还平仓后的 USD 收益 ===
-        balances[msg.sender].usd = FHE.add(balances[msg.sender].usd, closeValue);
-
-        // === 授权密文访问权给用户 ===
-        _authorizeHandle(actualAmount);
-        _authorizeHandle(closeValue);
-        _authorizeHandle(closeBtcSize);
+        
         _authorizeHandle(pos.contractCount);
         _authorizeHandle(pos.btcSize);
-        _authorizeHandle(balances[msg.sender].usd);
-
-        // === 事件日志 ===
-        emit PositionClosed(msg.sender, pid, currentPrice);
     }
-
-    /// @notice 获取整数 BTC 价格（最少为 1）
-    function getAdjustedBtcPrice() public view returns (uint64) {
+    
+    /**
+     * @notice 获取调整后的 BTC 价格
+     */
+    function _getAdjustedBtcPrice() private view returns (uint64) {
         uint256 price = IPriceOracle(priceOracleAddress).getLatestBtcPrice();
         require(price >= 1, "Price too low");
-        require(price <= type(uint64).max, "Overflow");
+        require(price <= type(uint64).max, "Price overflow");
         return uint64(price);
     }
-
-    function updatePriceOracle(address newOracle) external onlyOwner {
-        require(newOracle != address(0), "Zero address");
+    
+    /**
+     * @notice 授权密文访问权限
+     */
+    function _authorizeHandle(euint64 handle) private {
+        FHE.allowThis(handle);
+        FHE.allow(handle, msg.sender);
+    }
+    
+    /**
+     * @notice 授权布尔密文访问权限
+     */
+    function _authorizeHandle(ebool handle) private {
+        FHE.allowThis(handle);
+        FHE.allow(handle, msg.sender);
+    }
+    
+    // ============================
+    // 管理员功能
+    // ============================
+    
+    /**
+     * @notice 更新价格预言机地址
+     * @param newOracle 新的预言机地址
+     */
+    function updatePriceOracle(address newOracle) 
+        external 
+        onlyOwner 
+        validAddress(newOracle) 
+    {
+        address oldOracle = priceOracleAddress;
         priceOracleAddress = newOracle;
+        emit PriceOracleUpdated(oldOracle, newOracle);
     }
-
-    function updateRevealAddress(address newReveal) external onlyOwner {
-        require(newReveal != address(0), "Zero address");
+    
+    /**
+     * @notice 更新揭示地址
+     * @param newReveal 新的揭示地址
+     */
+    function updateRevealAddress(address newReveal) 
+        external 
+        onlyOwner 
+        validAddress(newReveal) 
+    {
+        address oldReveal = revealAddress;
         revealAddress = newReveal;
-    }
-
-    function _authorizeHandle(euint64 h) internal {
-        FHE.allowThis(h);
-        FHE.allow(h, msg.sender);
-    }
-
-    function _authorizeHandle(ebool h) internal {
-        FHE.allowThis(h);
-        FHE.allow(h, msg.sender);
+        emit RevealAddressUpdated(oldReveal, newReveal);
     }
 }
