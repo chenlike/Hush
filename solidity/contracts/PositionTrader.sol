@@ -8,7 +8,6 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
  * @title FHE 永续合约交易合约
- * @author Your Name
  * @notice 支持 1 倍杠杆的全密态永续合约交易
  * @dev 每张合约面值固定为 1 美元，BTC 头寸精确到 satoshi
  */
@@ -18,7 +17,7 @@ contract PositionTrader is SepoliaConfig, Ownable {
     // 常量定义
     // ============================
     
-    uint64 public constant INITIAL_CASH_BASE = 10_000; // 初始虚拟资产 (USD)
+    uint64 public immutable INITIAL_CASH_BASE; // 初始虚拟资产 (USD)
     uint64 public constant CONTRACT_USD_VALUE = 1;     // 每张合约价值 (USD)
     uint64 public constant BTC_PRECISION = 1e8;        // BTC 精度 (satoshi)
     uint256 public constant CALCULATION_PRECISION = 1e8; // 计算精度
@@ -28,7 +27,6 @@ contract PositionTrader is SepoliaConfig, Ownable {
     // ============================
     
     address public priceOracleAddress;
-    address public revealAddress;
     
     uint256 private _positionCounter;
     
@@ -49,6 +47,16 @@ contract PositionTrader is SepoliaConfig, Ownable {
         euint64 usd; // USD 余额（密文）
     }
     
+    struct BalanceReveal {
+        uint64 amount;          // 解密时的余额金额
+        uint256 timestamp;      // 解密时间戳
+    }
+    
+    struct DecryptionRequest {
+        address user;           // 请求解密的用户
+        uint256 timestamp;      // 请求时间戳
+    }
+    
     // ============================
     // 映射存储
     // ============================
@@ -57,6 +65,8 @@ contract PositionTrader is SepoliaConfig, Ownable {
     mapping(address => Balance) private _balances;
     mapping(address => bool) public isRegistered;
     mapping(address => uint256[]) private _userPositions;
+    mapping(address => BalanceReveal) private _latestBalanceReveal;
+    mapping(uint256 => DecryptionRequest) private _decryptionRequests;
     
     // ============================
     // 事件定义
@@ -75,8 +85,9 @@ contract PositionTrader is SepoliaConfig, Ownable {
         uint64 exitPrice,
         uint256 timestamp
     );
+    event BalanceRevealed(address indexed user, uint64 amount, uint256 timestamp);
+    event DecryptionRequested(address indexed user, uint256 indexed requestId, uint256 timestamp);
     event PriceOracleUpdated(address indexed oldOracle, address indexed newOracle);
-    event RevealAddressUpdated(address indexed oldReveal, address indexed newReveal);
     
     // ============================
     // 修饰符
@@ -101,11 +112,18 @@ contract PositionTrader is SepoliaConfig, Ownable {
     // 构造函数
     // ============================
     
-    constructor(address _priceOracle) 
+    /**
+     * @notice 构造函数
+     * @param _priceOracle 价格预言机地址
+     * @param _initialCashBase 用户注册时的初始虚拟资产数量 (USD)
+     */
+    constructor(address _priceOracle, uint64 _initialCashBase) 
         Ownable(msg.sender) 
         validAddress(_priceOracle) 
     {
+        require(_initialCashBase > 0, "Initial cash base must be greater than 0");
         priceOracleAddress = _priceOracle;
+        INITIAL_CASH_BASE = _initialCashBase;
     }
     
     // ============================
@@ -135,9 +153,9 @@ contract PositionTrader is SepoliaConfig, Ownable {
     /**
      * @notice 获取用户 USD 余额（密文）
      * @param user 用户地址
-     * @return 用户的 USD 余额
+     * @return balance 用户的 USD 余额
      */
-    function getBalance(address user) external view returns (euint64) {
+    function getBalance(address user) external view returns (euint64 balance) {
         require(isRegistered[user], "User not registered");
         return _balances[user].usd;
     }
@@ -145,7 +163,11 @@ contract PositionTrader is SepoliaConfig, Ownable {
     /**
      * @notice 获取特定持仓信息
      * @param positionId 持仓 ID
-     * @return 持仓的详细信息
+     * @return owner 持仓所有者地址
+     * @return contractCount 合约张数（密文）
+     * @return btcSize BTC 持仓大小（密文）
+     * @return entryPrice 开仓价格
+     * @return isLong 是否做多（密文）
      */
     function getPosition(uint256 positionId) 
         external 
@@ -173,10 +195,100 @@ contract PositionTrader is SepoliaConfig, Ownable {
     
     /**
      * @notice 获取当前 BTC 价格
-     * @return 调整后的 BTC 价格
+     * @return price 调整后的 BTC 价格
      */
-    function getCurrentBtcPrice() external view returns (uint64) {
+    function getCurrentBtcPrice() external view returns (uint64 price) {
         return _getAdjustedBtcPrice();
+    }
+    
+        /**
+     * @notice 请求解密自己的USD余额
+     * @dev 向FHEVM后端发送异步解密请求
+     * @return requestId 解密请求的ID
+     */
+    function revealMyBalance() external onlyRegistered returns (uint256 requestId) {
+        uint256 timestamp = block.timestamp;
+        
+
+        
+        // 准备要解密的密文数组
+        bytes32[] memory cipherTexts = new bytes32[](1);
+        cipherTexts[0] = FHE.toBytes32(_balances[msg.sender].usd);
+        
+        // 发送解密请求
+        requestId = FHE.requestDecryption(
+            cipherTexts,
+            this.callbackRevealBalance.selector
+        );
+        
+        // 记录解密请求
+        _decryptionRequests[requestId] = DecryptionRequest({
+            user: msg.sender,
+            timestamp: timestamp
+        });
+        
+        emit DecryptionRequested(msg.sender, requestId, timestamp);
+        
+        return requestId;
+    }
+    
+    /**
+     * @notice FHEVM后端解密余额后的回调函数
+     * @param requestId 解密请求ID
+     * @param decryptedAmount 解密后的余额数量
+     * @param signatures 用于验证回调真实性的签名数组
+     */
+    function callbackRevealBalance(
+        uint256 requestId, 
+        uint64 decryptedAmount, 
+        bytes[] memory signatures
+    ) external {
+        // 验证回调的真实性，防止恶意调用
+        FHE.checkSignatures(requestId, signatures);
+        
+        // 获取解密请求信息
+        DecryptionRequest memory request = _decryptionRequests[requestId];
+        require(request.user != address(0), "Invalid request ID");
+        
+        // 更新用户的最新余额解密记录
+        _latestBalanceReveal[request.user] = BalanceReveal({
+            amount: decryptedAmount,
+            timestamp: request.timestamp
+        });
+        
+        emit BalanceRevealed(request.user, decryptedAmount, request.timestamp);
+    }
+    
+    /**
+     * @notice 获取用户最新的余额解密记录
+     * @param user 用户地址
+     * @return amount 上次解密的余额数量
+     * @return timestamp 上次解密的时间戳
+     */
+    function getLatestBalanceReveal(address user) 
+        external 
+        view 
+        returns (uint64 amount, uint256 timestamp) 
+    {
+        require(isRegistered[user], "User not registered");
+        BalanceReveal memory reveal = _latestBalanceReveal[user];
+        return (reveal.amount, reveal.timestamp);
+    }
+    
+    /**
+     * @notice 检查解密请求状态
+     * @param requestId 请求ID
+     * @return user 请求用户地址
+     * @return timestamp 请求时间戳
+     * @return isCompleted 是否已完成
+     */
+    function getDecryptionRequestStatus(uint256 requestId) 
+        external 
+        view 
+        returns (address user, uint256 timestamp, bool isCompleted) 
+    {
+        DecryptionRequest memory request = _decryptionRequests[requestId];
+        return (request.user, request.timestamp, request.user == address(0));
     }
     
     // ============================
@@ -434,17 +546,4 @@ contract PositionTrader is SepoliaConfig, Ownable {
         emit PriceOracleUpdated(oldOracle, newOracle);
     }
     
-    /**
-     * @notice 更新揭示地址
-     * @param newReveal 新的揭示地址
-     */
-    function updateRevealAddress(address newReveal) 
-        external 
-        onlyOwner 
-        validAddress(newReveal) 
-    {
-        address oldReveal = revealAddress;
-        revealAddress = newReveal;
-        emit RevealAddressUpdated(oldReveal, newReveal);
-    }
 }
