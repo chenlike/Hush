@@ -1,14 +1,16 @@
 import { title } from "@/components/primitives";
 import DefaultLayout from "@/layouts/default";
+import RegistrationStatus from "@/components/registration-status";
 
 export default function DocsPage() {
   return (
     <DefaultLayout>
-      <section className="flex flex-col items-center justify-center gap-4 py-8 md:py-10">
-        <div className="inline-block max-w-lg text-center justify-center">
-          <h1 className={title()}>trade</h1>
+
+        {/* 注册状态组件 */}
+        <div className="w-full max-w-4xl">
+          <RegistrationStatus />
         </div>
-      </section>
+
     </DefaultLayout>
   );
 }

@@ -12,6 +12,7 @@ import { siteConfig } from "@/config/site";
 import {
   GithubIcon,
 } from "@/components/icons";
+import { FHEStatus } from "./fhe-status";
 
 export const Navbar = () => {
 
@@ -50,6 +51,9 @@ export const Navbar = () => {
         className="sm:flex basis-1/5 sm:basis-full"
         justify="end"
       >
+        <NavbarItem className="hidden sm:flex">
+          <FHEStatus />
+        </NavbarItem>
         <NavbarItem className="sm:flex gap-2">
           <Link isExternal href={siteConfig.links.github} title="GitHub">
             <GithubIcon className="text-default-500" />
