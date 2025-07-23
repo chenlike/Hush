@@ -6,6 +6,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RainbowKitProvider, darkTheme } from '@rainbow-me/rainbowkit';
 import { WagmiProvider } from 'wagmi';
 import { config } from './lib/wagmi';
+import { ToastProvider } from '@/lib/toast';
+import { ToastContainer } from '@/components/toast-container';
 
 import '@rainbow-me/rainbowkit/styles.css';
 
@@ -25,7 +27,10 @@ export function Provider({ children }: { children: React.ReactNode }) {
       <QueryClientProvider client={queryClient}>
         <RainbowKitProvider theme={darkTheme()}>
           <HeroUIProvider navigate={navigate} useHref={useHref}>
-            {children}
+            <ToastProvider>
+              {children}
+              <ToastContainer />
+            </ToastProvider>
           </HeroUIProvider>
         </RainbowKitProvider>
       </QueryClientProvider>
