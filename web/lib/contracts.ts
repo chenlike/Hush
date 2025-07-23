@@ -1,217 +1,13 @@
 // 合约配置
 export const CONTRACTS = {
     PRICE_ORACLE: {
-        address: '0xF87b16E1A5B1F2fd2484CFAb216a69595613033B' as `0x${string}`,
-        abi: [
-            {
-              "inputs": [],
-              "stateMutability": "nonpayable",
-              "type": "constructor"
-            },
-            {
-              "anonymous": false,
-              "inputs": [
-                {
-                  "indexed": false,
-                  "internalType": "uint256",
-                  "name": "timestamp",
-                  "type": "uint256"
-                }
-              ],
-              "name": "EncryptedPriceUpdated",
-              "type": "event"
-            },
-            {
-              "anonymous": false,
-              "inputs": [
-                {
-                  "indexed": false,
-                  "internalType": "uint32",
-                  "name": "oldPrice",
-                  "type": "uint32"
-                },
-                {
-                  "indexed": false,
-                  "internalType": "uint32",
-                  "name": "newPrice",
-                  "type": "uint32"
-                },
-                {
-                  "indexed": false,
-                  "internalType": "uint256",
-                  "name": "timestamp",
-                  "type": "uint256"
-                }
-              ],
-              "name": "PriceUpdated",
-              "type": "event"
-            },
-            {
-              "inputs": [],
-              "name": "btcPriceUSD",
-              "outputs": [
-                {
-                  "internalType": "uint32",
-                  "name": "",
-                  "type": "uint32"
-                }
-              ],
-              "stateMutability": "view",
-              "type": "function"
-            },
-            {
-              "inputs": [],
-              "name": "encryptedBtcPrice",
-              "outputs": [
-                {
-                  "internalType": "euint32",
-                  "name": "",
-                  "type": "bytes32"
-                }
-              ],
-              "stateMutability": "view",
-              "type": "function"
-            },
-            {
-              "inputs": [],
-              "name": "getBtcPrice",
-              "outputs": [
-                {
-                  "internalType": "uint32",
-                  "name": "",
-                  "type": "uint32"
-                }
-              ],
-              "stateMutability": "view",
-              "type": "function"
-            },
-            {
-              "inputs": [],
-              "name": "getBtcPriceUSD",
-              "outputs": [
-                {
-                  "internalType": "uint32",
-                  "name": "",
-                  "type": "uint32"
-                }
-              ],
-              "stateMutability": "view",
-              "type": "function"
-            },
-            {
-              "inputs": [],
-              "name": "getEncryptedBtcPrice",
-              "outputs": [
-                {
-                  "internalType": "euint32",
-                  "name": "",
-                  "type": "bytes32"
-                }
-              ],
-              "stateMutability": "view",
-              "type": "function"
-            },
-            {
-              "inputs": [],
-              "name": "getLastUpdateTime",
-              "outputs": [
-                {
-                  "internalType": "uint256",
-                  "name": "",
-                  "type": "uint256"
-                }
-              ],
-              "stateMutability": "view",
-              "type": "function"
-            },
-            {
-              "inputs": [],
-              "name": "isPriceStale",
-              "outputs": [
-                {
-                  "internalType": "bool",
-                  "name": "",
-                  "type": "bool"
-                }
-              ],
-              "stateMutability": "view",
-              "type": "function"
-            },
-            {
-              "inputs": [],
-              "name": "lastUpdateTime",
-              "outputs": [
-                {
-                  "internalType": "uint256",
-                  "name": "",
-                  "type": "uint256"
-                }
-              ],
-              "stateMutability": "view",
-              "type": "function"
-            },
-            {
-              "inputs": [],
-              "name": "priceUpdater",
-              "outputs": [
-                {
-                  "internalType": "address",
-                  "name": "",
-                  "type": "address"
-                }
-              ],
-              "stateMutability": "view",
-              "type": "function"
-            },
-            {
-              "inputs": [
-                {
-                  "internalType": "address",
-                  "name": "newUpdater",
-                  "type": "address"
-                }
-              ],
-              "name": "setPriceUpdater",
-              "outputs": [],
-              "stateMutability": "nonpayable",
-              "type": "function"
-            },
-            {
-              "inputs": [
-                {
-                  "internalType": "euint32",
-                  "name": "newEncryptedPrice",
-                  "type": "bytes32"
-                }
-              ],
-              "name": "updateEncryptedPrice",
-              "outputs": [],
-              "stateMutability": "nonpayable",
-              "type": "function"
-            },
-            {
-              "inputs": [
-                {
-                  "internalType": "uint32",
-                  "name": "newPriceUSD",
-                  "type": "uint32"
-                }
-              ],
-              "name": "updatePrice",
-              "outputs": [],
-              "stateMutability": "nonpayable",
-              "type": "function"
-            }
-          ] as const
-    },
-    TRADER: {
-        address: '0xd648BF3F9631c78B9c04350D647Fa1D31B9f4D25' as `0x${string}`,
-        abi: [
+        address: '0x25c983f7771fAF0335B41BE8763580f779D82Ae6' as `0x${string}`,
+        abi:[
           {
             "inputs": [
               {
                 "internalType": "address",
-                "name": "_priceOracle",
+                "name": "aggregatorAddress",
                 "type": "address"
               }
             ],
@@ -260,6 +56,262 @@ export const CONTRACTS = {
             "type": "event"
           },
           {
+            "inputs": [],
+            "name": "getDecimals",
+            "outputs": [
+              {
+                "internalType": "uint8",
+                "name": "",
+                "type": "uint8"
+              }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+          },
+          {
+            "inputs": [],
+            "name": "getLatestBtcPrice",
+            "outputs": [
+              {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+              }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+          },
+          {
+            "inputs": [],
+            "name": "manualMode",
+            "outputs": [
+              {
+                "internalType": "bool",
+                "name": "",
+                "type": "bool"
+              }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+          },
+          {
+            "inputs": [],
+            "name": "owner",
+            "outputs": [
+              {
+                "internalType": "address",
+                "name": "",
+                "type": "address"
+              }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+          },
+          {
+            "inputs": [],
+            "name": "renounceOwnership",
+            "outputs": [],
+            "stateMutability": "nonpayable",
+            "type": "function"
+          },
+          {
+            "inputs": [
+              {
+                "internalType": "address",
+                "name": "aggregatorAddress",
+                "type": "address"
+              }
+            ],
+            "name": "setAggregatorAddress",
+            "outputs": [],
+            "stateMutability": "nonpayable",
+            "type": "function"
+          },
+          {
+            "inputs": [
+              {
+                "internalType": "bool",
+                "name": "enabled",
+                "type": "bool"
+              }
+            ],
+            "name": "setManualMode",
+            "outputs": [],
+            "stateMutability": "nonpayable",
+            "type": "function"
+          },
+          {
+            "inputs": [
+              {
+                "internalType": "uint256",
+                "name": "manualPrice",
+                "type": "uint256"
+              }
+            ],
+            "name": "setManualPrice",
+            "outputs": [],
+            "stateMutability": "nonpayable",
+            "type": "function"
+          },
+          {
+            "inputs": [
+              {
+                "internalType": "address",
+                "name": "newOwner",
+                "type": "address"
+              }
+            ],
+            "name": "transferOwnership",
+            "outputs": [],
+            "stateMutability": "nonpayable",
+            "type": "function"
+          }
+        ] as const
+    },
+    TRADER: {
+        address: '0xbC04fC2385e07C756FD7c3fb13c763D40799C11C' as `0x${string}`,
+        abi: [
+          {
+            "inputs": [
+              {
+                "internalType": "address",
+                "name": "_priceOracle",
+                "type": "address"
+              },
+              {
+                "internalType": "uint64",
+                "name": "_initialCashBase",
+                "type": "uint64"
+              }
+            ],
+            "stateMutability": "nonpayable",
+            "type": "constructor"
+          },
+          {
+            "inputs": [],
+            "name": "HandlesAlreadySavedForRequestID",
+            "type": "error"
+          },
+          {
+            "inputs": [],
+            "name": "InvalidKMSSignatures",
+            "type": "error"
+          },
+          {
+            "inputs": [],
+            "name": "NoHandleFoundForRequestID",
+            "type": "error"
+          },
+          {
+            "inputs": [
+              {
+                "internalType": "address",
+                "name": "owner",
+                "type": "address"
+              }
+            ],
+            "name": "OwnableInvalidOwner",
+            "type": "error"
+          },
+          {
+            "inputs": [
+              {
+                "internalType": "address",
+                "name": "account",
+                "type": "address"
+              }
+            ],
+            "name": "OwnableUnauthorizedAccount",
+            "type": "error"
+          },
+          {
+            "inputs": [],
+            "name": "UnsupportedHandleType",
+            "type": "error"
+          },
+          {
+            "anonymous": false,
+            "inputs": [
+              {
+                "indexed": true,
+                "internalType": "address",
+                "name": "user",
+                "type": "address"
+              },
+              {
+                "indexed": false,
+                "internalType": "uint64",
+                "name": "amount",
+                "type": "uint64"
+              },
+              {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "timestamp",
+                "type": "uint256"
+              }
+            ],
+            "name": "BalanceRevealed",
+            "type": "event"
+          },
+          {
+            "anonymous": false,
+            "inputs": [
+              {
+                "indexed": true,
+                "internalType": "uint256",
+                "name": "requestID",
+                "type": "uint256"
+              }
+            ],
+            "name": "DecryptionFulfilled",
+            "type": "event"
+          },
+          {
+            "anonymous": false,
+            "inputs": [
+              {
+                "indexed": true,
+                "internalType": "address",
+                "name": "user",
+                "type": "address"
+              },
+              {
+                "indexed": true,
+                "internalType": "uint256",
+                "name": "requestId",
+                "type": "uint256"
+              },
+              {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "timestamp",
+                "type": "uint256"
+              }
+            ],
+            "name": "DecryptionRequested",
+            "type": "event"
+          },
+          {
+            "anonymous": false,
+            "inputs": [
+              {
+                "indexed": true,
+                "internalType": "address",
+                "name": "previousOwner",
+                "type": "address"
+              },
+              {
+                "indexed": true,
+                "internalType": "address",
+                "name": "newOwner",
+                "type": "address"
+              }
+            ],
+            "name": "OwnershipTransferred",
+            "type": "event"
+          },
+          {
             "anonymous": false,
             "inputs": [
               {
@@ -279,6 +331,12 @@ export const CONTRACTS = {
                 "internalType": "uint64",
                 "name": "exitPrice",
                 "type": "uint64"
+              },
+              {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "timestamp",
+                "type": "uint256"
               }
             ],
             "name": "PositionClosed",
@@ -301,18 +359,37 @@ export const CONTRACTS = {
               },
               {
                 "indexed": false,
-                "internalType": "bool",
-                "name": "isLong",
-                "type": "bool"
-              },
-              {
-                "indexed": false,
                 "internalType": "uint64",
                 "name": "entryPrice",
                 "type": "uint64"
+              },
+              {
+                "indexed": false,
+                "internalType": "uint256",
+                "name": "timestamp",
+                "type": "uint256"
               }
             ],
             "name": "PositionOpened",
+            "type": "event"
+          },
+          {
+            "anonymous": false,
+            "inputs": [
+              {
+                "indexed": true,
+                "internalType": "address",
+                "name": "oldOracle",
+                "type": "address"
+              },
+              {
+                "indexed": true,
+                "internalType": "address",
+                "name": "newOracle",
+                "type": "address"
+              }
+            ],
+            "name": "PriceOracleUpdated",
             "type": "event"
           },
           {
@@ -330,7 +407,33 @@ export const CONTRACTS = {
           },
           {
             "inputs": [],
-            "name": "DECIMALS",
+            "name": "BTC_PRECISION",
+            "outputs": [
+              {
+                "internalType": "uint64",
+                "name": "",
+                "type": "uint64"
+              }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+          },
+          {
+            "inputs": [],
+            "name": "CALCULATION_PRECISION",
+            "outputs": [
+              {
+                "internalType": "uint256",
+                "name": "",
+                "type": "uint256"
+              }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+          },
+          {
+            "inputs": [],
+            "name": "CONTRACT_USD_VALUE",
             "outputs": [
               {
                 "internalType": "uint64",
@@ -355,55 +458,49 @@ export const CONTRACTS = {
             "type": "function"
           },
           {
-            "inputs": [],
-            "name": "PRECISION_FACTOR",
-            "outputs": [
+            "inputs": [
+              {
+                "internalType": "uint256",
+                "name": "requestId",
+                "type": "uint256"
+              },
               {
                 "internalType": "uint64",
-                "name": "",
+                "name": "decryptedAmount",
                 "type": "uint64"
+              },
+              {
+                "internalType": "bytes[]",
+                "name": "signatures",
+                "type": "bytes[]"
               }
             ],
-            "stateMutability": "view",
+            "name": "callbackRevealBalance",
+            "outputs": [],
+            "stateMutability": "nonpayable",
             "type": "function"
           },
           {
             "inputs": [
               {
                 "internalType": "uint256",
-                "name": "pid",
+                "name": "positionId",
                 "type": "uint256"
+              },
+              {
+                "internalType": "externalEuint64",
+                "name": "_usdValue",
+                "type": "bytes32"
+              },
+              {
+                "internalType": "bytes",
+                "name": "proof",
+                "type": "bytes"
               }
             ],
             "name": "closePosition",
             "outputs": [],
             "stateMutability": "nonpayable",
-            "type": "function"
-          },
-          {
-            "inputs": [
-              {
-                "internalType": "uint256",
-                "name": "pid",
-                "type": "uint256"
-              }
-            ],
-            "name": "emergencyClosePosition",
-            "outputs": [],
-            "stateMutability": "nonpayable",
-            "type": "function"
-          },
-          {
-            "inputs": [],
-            "name": "getAdjustedBtcPrice",
-            "outputs": [
-              {
-                "internalType": "uint64",
-                "name": "",
-                "type": "uint64"
-              }
-            ],
-            "stateMutability": "view",
             "type": "function"
           },
           {
@@ -418,8 +515,21 @@ export const CONTRACTS = {
             "outputs": [
               {
                 "internalType": "euint64",
-                "name": "",
+                "name": "balance",
                 "type": "bytes32"
+              }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+          },
+          {
+            "inputs": [],
+            "name": "getCurrentBtcPrice",
+            "outputs": [
+              {
+                "internalType": "uint64",
+                "name": "price",
+                "type": "uint64"
               }
             ],
             "stateMutability": "view",
@@ -429,7 +539,60 @@ export const CONTRACTS = {
             "inputs": [
               {
                 "internalType": "uint256",
-                "name": "pid",
+                "name": "requestId",
+                "type": "uint256"
+              }
+            ],
+            "name": "getDecryptionRequestStatus",
+            "outputs": [
+              {
+                "internalType": "address",
+                "name": "user",
+                "type": "address"
+              },
+              {
+                "internalType": "uint256",
+                "name": "timestamp",
+                "type": "uint256"
+              },
+              {
+                "internalType": "bool",
+                "name": "isCompleted",
+                "type": "bool"
+              }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+          },
+          {
+            "inputs": [
+              {
+                "internalType": "address",
+                "name": "user",
+                "type": "address"
+              }
+            ],
+            "name": "getLatestBalanceReveal",
+            "outputs": [
+              {
+                "internalType": "uint64",
+                "name": "amount",
+                "type": "uint64"
+              },
+              {
+                "internalType": "uint256",
+                "name": "timestamp",
+                "type": "uint256"
+              }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+          },
+          {
+            "inputs": [
+              {
+                "internalType": "uint256",
+                "name": "positionId",
                 "type": "uint256"
               }
             ],
@@ -442,7 +605,7 @@ export const CONTRACTS = {
               },
               {
                 "internalType": "euint64",
-                "name": "marginAmount",
+                "name": "contractCount",
                 "type": "bytes32"
               },
               {
@@ -459,30 +622,6 @@ export const CONTRACTS = {
                 "internalType": "ebool",
                 "name": "isLong",
                 "type": "bytes32"
-              },
-              {
-                "internalType": "enum PositionTrader.PositionStatus",
-                "name": "status",
-                "type": "uint8"
-              }
-            ],
-            "stateMutability": "view",
-            "type": "function"
-          },
-          {
-            "inputs": [
-              {
-                "internalType": "address",
-                "name": "user",
-                "type": "address"
-              }
-            ],
-            "name": "getUserActivePositions",
-            "outputs": [
-              {
-                "internalType": "uint256[]",
-                "name": "",
-                "type": "uint256[]"
               }
             ],
             "stateMutability": "view",
@@ -502,25 +641,6 @@ export const CONTRACTS = {
                 "internalType": "uint256[]",
                 "name": "",
                 "type": "uint256[]"
-              }
-            ],
-            "stateMutability": "view",
-            "type": "function"
-          },
-          {
-            "inputs": [
-              {
-                "internalType": "uint256",
-                "name": "pid",
-                "type": "uint256"
-              }
-            ],
-            "name": "isOver",
-            "outputs": [
-              {
-                "internalType": "bool",
-                "name": "",
-                "type": "bool"
               }
             ],
             "stateMutability": "view",
@@ -554,7 +674,7 @@ export const CONTRACTS = {
               },
               {
                 "internalType": "externalEuint64",
-                "name": "_marginAmount",
+                "name": "_usdAmount",
                 "type": "bytes32"
               },
               {
@@ -567,7 +687,7 @@ export const CONTRACTS = {
             "outputs": [
               {
                 "internalType": "uint256",
-                "name": "",
+                "name": "positionId",
                 "type": "uint256"
               }
             ],
@@ -616,15 +736,15 @@ export const CONTRACTS = {
           },
           {
             "inputs": [],
-            "name": "revealAddress",
+            "name": "revealMyBalance",
             "outputs": [
               {
-                "internalType": "address",
-                "name": "",
-                "type": "address"
+                "internalType": "uint256",
+                "name": "requestId",
+                "type": "uint256"
               }
             ],
-            "stateMutability": "view",
+            "stateMutability": "nonpayable",
             "type": "function"
           },
           {
@@ -644,24 +764,11 @@ export const CONTRACTS = {
             "inputs": [
               {
                 "internalType": "address",
-                "name": "newPriceOracle",
+                "name": "newOracle",
                 "type": "address"
               }
             ],
             "name": "updatePriceOracle",
-            "outputs": [],
-            "stateMutability": "nonpayable",
-            "type": "function"
-          },
-          {
-            "inputs": [
-              {
-                "internalType": "address",
-                "name": "newRevealAddress",
-                "type": "address"
-              }
-            ],
-            "name": "updateRevealAddress",
             "outputs": [],
             "stateMutability": "nonpayable",
             "type": "function"

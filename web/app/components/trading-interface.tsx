@@ -14,10 +14,10 @@ export function TradingInterface() {
   const { address, isConnected } = useAccount();
   const { data: walletClient } = useWalletClient();
   const [isLoading, setIsLoading] = useState(false);
-  const [margin, setMargin] = useState('');
+  const [usdAmount, setUsdAmount] = useState(''); // 开仓用的USD金额
   const [isLong, setIsLong] = useState(true);
   const [positionId, setPositionId] = useState('');
-  const [closeBtcAmount, setCloseBtcAmount] = useState(''); // 添加平仓BTC数量状态
+  const [closeUsdAmount, setCloseUsdAmount] = useState(''); // 平仓用的USD金额
   const [fheReady, setFheReady] = useState(false);
   const [fheInitializing, setFheInitializing] = useState(false);
   const [fheFailed, setFheFailed] = useState(false);
@@ -31,6 +31,11 @@ export function TradingInterface() {
   const [decryptedPositionInfo, setDecryptedPositionInfo] = useState<any>(null);
   const [isDecryptingPosition, setIsDecryptingPosition] = useState(false);
   const [hasDecryptedPosition, setHasDecryptedPosition] = useState(false);
+
+  // 余额相关状态
+  const [decryptedBalance, setDecryptedBalance] = useState<string | null>(null);
+  const [isDecryptingBalance, setIsDecryptingBalance] = useState(false);
+  const [revealedBalanceInfo, setRevealedBalanceInfo] = useState<{amount: string, timestamp: string} | null>(null);
 
   // 辅助函数：将Uint8Array转换为hex字符串
   const uint8ArrayToHex = (array: Uint8Array): `0x${string}` => {
@@ -48,24 +53,45 @@ export function TradingInterface() {
     },
   });
 
-  // 获取用户持仓 - 由于合约没有getPositionIds函数，我们需要通过其他方式获取
-  // 这里暂时注释掉，因为合约中没有这个函数
-  // const { data: positionIds } = useContractRead({
-  //   address: CONTRACTS.TRADER.address,
-  //   abi: CONTRACTS.TRADER.abi,
-  //   functionName: 'getPositionIds',
-  //   args: [],
-  //   query: {
-  //     enabled: !!address && !!isRegistered,
-  //   },
-  // });
-
   // 获取当前 BTC 价格
   const { data: btcPrice } = useContractRead({
-    address: CONTRACTS.PRICE_ORACLE.address,
-    abi: CONTRACTS.PRICE_ORACLE.abi,
-    functionName: 'getBtcPrice',
+    address: CONTRACTS.TRADER.address,
+    abi: CONTRACTS.TRADER.abi,
+    functionName: 'getCurrentBtcPrice',
     args: [],
+  });
+
+  // 获取用户余额（加密的）
+  const { data: encryptedBalance } = useContractRead({
+    address: CONTRACTS.TRADER.address,
+    abi: CONTRACTS.TRADER.abi,
+    functionName: 'getBalance',
+    args: address ? [address] : undefined,
+    query: {
+      enabled: !!address && !!isRegistered,
+    },
+  });
+
+  // 获取用户持仓ID列表
+  const { data: userPositionIds } = useContractRead({
+    address: CONTRACTS.TRADER.address,
+    abi: CONTRACTS.TRADER.abi,
+    functionName: 'getUserPositionIds',
+    args: address ? [address] : undefined,
+    query: {
+      enabled: !!address && !!isRegistered,
+    },
+  });
+
+  // 获取用户最新的余额揭示记录
+  const { data: latestBalanceReveal } = useContractRead({
+    address: CONTRACTS.TRADER.address,
+    abi: CONTRACTS.TRADER.abi,
+    functionName: 'getLatestBalanceReveal',
+    args: address ? [address] : undefined,
+    query: {
+      enabled: !!address && !!isRegistered,
+    },
   });
 
   // 注册合约调用
@@ -76,6 +102,9 @@ export function TradingInterface() {
 
   // 平仓合约调用
   const { writeContract: closePosition, data: closePositionData } = useContractWrite();
+
+  // 余额解密合约调用
+  const { writeContract: revealBalance, data: revealBalanceData } = useContractWrite();
 
   // 持仓查询合约调用
   const { data: positionData, refetch: refetchPosition } = useContractRead({
@@ -99,6 +128,10 @@ export function TradingInterface() {
 
   const { isLoading: isClosing } = useWaitForTransactionReceipt({
     hash: closePositionData,
+  });
+
+  const { isLoading: isRevealing } = useWaitForTransactionReceipt({
+    hash: revealBalanceData,
   });
 
   // 初始化 FHE SDK
@@ -142,10 +175,10 @@ export function TradingInterface() {
   };
 
   const handleOpenPosition = async () => {
-    if (!address || !margin || !fheReady) {
+    if (!address || !usdAmount || !fheReady) {
       console.log('开仓前置检查失败:', {
         address: !!address,
-        margin: !!margin,
+        usdAmount: !!usdAmount,
         fheReady: fheReady
       });
       return;
@@ -158,7 +191,7 @@ export function TradingInterface() {
     
     console.log("开始开仓流程");
     console.log("address", address);
-    console.log("margin", margin);
+    console.log("usdAmount", usdAmount);
     console.log("fheReady", fheReady);
     console.log("isConnected", isConnected);
     
@@ -170,11 +203,10 @@ export function TradingInterface() {
       // 添加交易方向 (ebool)
       encryptedInput.addBool(isLong);
       
-      // 添加保证金 (euint64) - 转换为合约的小数格式 (8位小数)
-      const marginValue = parseInt(margin);
-      const marginWithDecimals = marginValue * 1e8; // 转换为8位小数格式
-      console.log("marginWithDecimals", marginWithDecimals);
-      encryptedInput.add64(BigInt(marginWithDecimals));
+      // 添加USD金额 (euint64) - 合约中直接使用USD整数，不需要小数转换
+      const usdValue = parseInt(usdAmount);
+      console.log("usdValue", usdValue);
+      encryptedInput.add64(BigInt(usdValue));
       
       // 加密所有输入
       const encryptedResult = await encryptedInput.encrypt();
@@ -183,13 +215,13 @@ export function TradingInterface() {
       console.log('加密结果类型:', typeof encryptedResult);
       console.log('inputProof类型:', typeof encryptedResult.inputProof);
       console.log('inputProof内容:', encryptedResult.inputProof);
-      console.log('保证金值:', marginValue);
+      console.log('USD金额值:', usdValue);
       console.log('交易方向:', isLong);
       
       // 调用开仓合约 - 根据合约函数签名调整参数顺序
-      // openPosition(externalEbool _isLong, externalEuint64 _margin, bytes calldata proof)
+      // openPosition(externalEbool _isLong, externalEuint64 _usdAmount, bytes calldata proof)
       const isLongHandle = uint8ArrayToHex(encryptedResult.handles[0]);
-      const marginHandle = uint8ArrayToHex(encryptedResult.handles[1]);
+      const usdAmountHandle = uint8ArrayToHex(encryptedResult.handles[1]);
       
 
       
@@ -199,7 +231,7 @@ export function TradingInterface() {
         functionName: 'openPosition',
         args: [
           isLongHandle, // _isLong
-          marginHandle, // _margin
+          usdAmountHandle, // _usdAmount
           hexlify(encryptedResult.inputProof) as any // proof
         ]
       });
@@ -244,6 +276,16 @@ export function TradingInterface() {
     }
   }, [positionData]);
 
+  // 当余额揭示数据更新时，更新状态
+  useEffect(() => {
+    if (latestBalanceReveal && latestBalanceReveal[0] > 0) {
+      setRevealedBalanceInfo({
+        amount: latestBalanceReveal[0].toString(),
+        timestamp: new Date(Number(latestBalanceReveal[1]) * 1000).toLocaleString()
+      });
+    }
+  }, [latestBalanceReveal]);
+
   // 解密持仓信息
   const handleDecryptPosition = async () => {
     if (!positionInfo || !address || !walletClient) return;
@@ -252,14 +294,13 @@ export function TradingInterface() {
     setHasDecryptedPosition(true);
 
     try {
-      // 持仓信息结构: [owner, margin, btcAmount, entryPrice, isLong]
-      // margin 和 btcAmount 是加密的，需要解密
-      const marginHandle = String(positionInfo[1]);
-      const btcAmountHandle = String(positionInfo[2]);
+      // 持仓信息结构: [owner, contractCount, btcSize, entryPrice, isLong]
+      // contractCount, btcSize 和 isLong 是加密的，需要解密
+      const contractCountHandle = String(positionInfo[1]);
+      const btcSizeHandle = String(positionInfo[2]);
       const isLongHandle = String(positionInfo[4]);
 
-
-      const handles = [ marginHandle,btcAmountHandle, isLongHandle];
+      const handles = [contractCountHandle, btcSizeHandle, isLongHandle];
       console.log("handles", handles);
       const results = await fheService.decryptMultipleValuesWithWalletClient(
         handles,
@@ -269,20 +310,21 @@ export function TradingInterface() {
 
       console.log('持仓解密结果:', results);
 
-      const margin = results[marginHandle];
-      const btcAmount = results[btcAmountHandle];
+      const contractCount = results[contractCountHandle];
+      const btcSize = results[btcSizeHandle];
       const isLong = results[isLongHandle];
-      console.log("margin", margin);
-      console.log("btcAmount", btcAmount);
+      console.log("contractCount", contractCount);
+      console.log("btcSize", btcSize);
       console.log("isLong", isLong);  
-      // 格式化显示 - 保证金使用2位小数，BTC数量使用8位小数
-      const marginFormatted = (Number(margin) / 1e8).toFixed(2);
-      const btcAmountFormatted = (Number(btcAmount) / 1e8).toFixed(8);
+      
+      // 格式化显示
+      const contractCountFormatted = contractCount?.toString() || 'N/A';
+      const btcSizeFormatted = (Number(btcSize) / 1e8).toFixed(8);
 
       setDecryptedPositionInfo({
         owner: positionInfo[0],
-        margin: marginFormatted,
-        btcAmount: btcAmountFormatted,
+        contractCount: contractCountFormatted,
+        btcSize: btcSizeFormatted,
         entryPrice: positionInfo[3]?.toString() || 'N/A',
         isLong: isLong
       });
@@ -299,24 +341,82 @@ export function TradingInterface() {
   };
 
   const handleClosePosition = async () => {
-    if (!positionId || !address || !fheReady || !closeBtcAmount) return;
+    if (!positionId || !address || !fheReady || !closeUsdAmount) return;
     
+    setIsLoading(true);
     try {
-
+      // 创建加密输入实例
+      const encryptedInput = fheService.createEncryptedInput(CONTRACTS.TRADER.address, address);
       
-      // 调用平仓合约 - 根据合约函数签名调整参数
+      // 添加平仓USD金额 (euint64)
+      const usdValue = parseInt(closeUsdAmount);
+      encryptedInput.add64(BigInt(usdValue));
+      
+      // 加密所有输入
+      const encryptedResult = await encryptedInput.encrypt();
+      
+      // 调用平仓合约
+      // closePosition(uint256 positionId, externalEuint64 _usdValue, bytes calldata proof)
+      const usdValueHandle = uint8ArrayToHex(encryptedResult.handles[0]);
 
       let s = closePosition({
         address: CONTRACTS.TRADER.address,
         abi: CONTRACTS.TRADER.abi,
         functionName: 'closePosition',
         args: [
-          BigInt(positionId)
+          BigInt(positionId),
+          usdValueHandle,
+          hexlify(encryptedResult.inputProof) as any
         ]
       });
       console.log("平仓结果:", s);
     } catch (error) {
       console.error('平仓失败:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 私人查看余额（FHE解密，不提交交易）
+  const handleDecryptBalance = async () => {
+    if (!encryptedBalance || !address || !walletClient) return;
+
+    setIsDecryptingBalance(true);
+    try {
+      const balanceHandle = String(encryptedBalance);
+      const results = await fheService.decryptMultipleValuesWithWalletClient(
+        [balanceHandle],
+        CONTRACTS.TRADER.address,
+        walletClient
+      );
+      
+      const balance = results[balanceHandle];
+      setDecryptedBalance(balance?.toString() || 'N/A');
+    } catch (error: any) {
+      console.error('余额解密失败:', error);
+      if (error.message.includes('user rejected')) {
+        setDecryptedBalance('用户取消了签名');
+      } else {
+        setDecryptedBalance(`解密失败: ${error.message}`);
+      }
+    } finally {
+      setIsDecryptingBalance(false);
+    }
+  };
+
+  // 公开揭示余额（提交交易到链上）
+  const handleRevealBalance = async () => {
+    if (!address) return;
+    
+    try {
+      revealBalance({
+        address: CONTRACTS.TRADER.address,
+        abi: CONTRACTS.TRADER.abi,
+        functionName: 'revealMyBalance',
+        args: [],
+      });
+    } catch (error) {
+      console.error('余额揭示请求失败:', error);
     }
   };
 
@@ -359,6 +459,49 @@ export function TradingInterface() {
               当前 BTC 价格: ${btcPrice.toString()}
             </p>
           )}
+          {encryptedBalance && (
+            <div className="text-sm space-y-2">
+              <p>余额: (加密数据)</p>
+              
+              {/* 私人查看余额 */}
+              <div className="border rounded p-2 bg-blue-50">
+                <p className="text-xs text-blue-600 mb-1">私人查看（仅自己可见）</p>
+                <button
+                  onClick={handleDecryptBalance}
+                  disabled={isDecryptingBalance}
+                  className="px-2 py-1 bg-blue-600 text-white rounded text-xs hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {isDecryptingBalance ? '解密中...' : '查看我的余额'}
+                </button>
+                {decryptedBalance && (
+                  <p className="mt-1 text-green-600">当前余额: ${decryptedBalance}</p>
+                )}
+              </div>
+
+              {/* 公开揭示余额 */}
+              <div className="border rounded p-2 bg-yellow-50">
+                <p className="text-xs text-yellow-600 mb-1">公开揭示（链上可见）</p>
+                <button
+                  onClick={handleRevealBalance}
+                  disabled={isRevealing}
+                  className="px-2 py-1 bg-yellow-600 text-white rounded text-xs hover:bg-yellow-700 disabled:opacity-50"
+                >
+                  {isRevealing ? '提交中...' : '公开揭示余额'}
+                </button>
+                {revealedBalanceInfo && (
+                  <div className="mt-1 text-orange-600">
+                    <p>已揭示余额: ${revealedBalanceInfo.amount}</p>
+                    <p className="text-xs">揭示时间: {revealedBalanceInfo.timestamp}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          {userPositionIds && userPositionIds.length > 0 && (
+            <div className="text-sm">
+              <p>您的持仓ID: {userPositionIds.map(id => id.toString()).join(', ')}</p>
+            </div>
+          )}
         </div>
         
         {!isRegistered && (
@@ -378,16 +521,16 @@ export function TradingInterface() {
             <h2 className="text-2xl font-semibold mb-4">开仓</h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-2">保证金 (USD)</label>
+                <label className="block text-sm font-medium mb-2">投入金额 (USD)</label>
                 <input
                   type="number"
-                  value={margin}
-                  onChange={(e) => setMargin(e.target.value)}
+                  value={usdAmount}
+                  onChange={(e) => setUsdAmount(e.target.value)}
                   className="w-full px-3 py-2 border rounded-md bg-background"
-                  placeholder="输入保证金金额 (如: 1000)"
+                  placeholder="输入USD金额 (如: 100)"
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  请输入USD金额，系统会自动转换为合约格式
+                  请输入要投入交易的USD金额，1 USD = 1张合约
                 </p>
               </div>
               <div>
@@ -415,7 +558,7 @@ export function TradingInterface() {
               </div>
               <button
                 onClick={handleOpenPosition}
-                disabled={!margin || isOpening || !fheReady || fheFailed || !isConnected}
+                disabled={!usdAmount || isOpening || !fheReady || fheFailed || !isConnected}
                 className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50"
               >
                 {isOpening ? '开仓中...' : 
@@ -455,8 +598,8 @@ export function TradingInterface() {
                   <h3 className="font-semibold">持仓信息</h3>
                   <div className="text-sm space-y-1">
                     <p>持仓所有者: {positionInfo[0]}</p>
-                    <p>保证金: {positionInfo[1]?.toString() || '加密数据'}</p>
-                    <p>BTC数量: {positionInfo[2]?.toString() || '加密数据'}</p>
+                    <p>合约数量: {positionInfo[1]?.toString() || '加密数据'}</p>
+                    <p>BTC持仓大小: {positionInfo[2]?.toString() || '加密数据'}</p>
                     <p>开仓价格: ${positionInfo[3]?.toString() || 'N/A'}</p>
                     <p>交易方向: {positionInfo[4] ? '多头' : '空头'}</p>
                   </div>
@@ -471,8 +614,8 @@ export function TradingInterface() {
                         <p className="text-sm text-red-500">{decryptedPositionInfo.error}</p>
                       ) : (
                         <div className="text-sm space-y-1">
-                          <p>保证金: ${decryptedPositionInfo.margin}</p>
-                          <p>BTC数量: {decryptedPositionInfo.btcAmount}</p>
+                          <p>合约数量: {decryptedPositionInfo.contractCount}</p>
+                          <p>BTC持仓大小: {decryptedPositionInfo.btcSize}</p>
                           <p>开仓价格: ${decryptedPositionInfo.entryPrice}</p>
                           <p>交易方向: {decryptedPositionInfo.isLong ? '多头' : '空头'}</p>
                         </div>
@@ -498,7 +641,7 @@ export function TradingInterface() {
                       <button
                         onClick={() => {
                           setPositionId(queryPositionId);
-                          setCloseBtcAmount('');
+                          setCloseUsdAmount('');
                         }}
                         className="px-3 py-1 bg-primary text-primary-foreground rounded text-sm hover:bg-primary/90"
                       >
@@ -525,45 +668,27 @@ export function TradingInterface() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-2">平仓 BTC 数量</label>
+                <label className="block text-sm font-medium mb-2">平仓金额 (USD)</label>
                 <input
                   type="number"
-                  step="0.00000001"
-                  value={closeBtcAmount}
-                  onChange={(e) => setCloseBtcAmount(e.target.value)}
+                  value={closeUsdAmount}
+                  onChange={(e) => setCloseUsdAmount(e.target.value)}
                   className="w-full px-3 py-2 border rounded-md bg-background"
-                  placeholder="输入平仓数量 (如: 0.001)"
+                  placeholder="输入平仓USD金额 (如: 50)"
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  请输入BTC数量，支持8位小数精度
+                  请输入要平仓的USD金额，不能超过持仓的总合约数量
                 </p>
               </div>
-              {/* 暂时注释掉持仓列表，因为合约中没有getPositionIds函数 */}
-              {/* {positionIds && positionIds.length > 0 && (
-                <div>
-                  <p className="text-sm text-muted-foreground mb-2">您的持仓:</p>
-                  <div className="space-y-1">
-                    {positionIds.map((id) => (
-                      <button
-                        key={id.toString()}
-                        onClick={() => setPositionId(id.toString())}
-                        className="block w-full text-left px-2 py-1 text-sm hover:bg-muted rounded"
-                      >
-                        持仓 #{id.toString()}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )} */}
               <button
                 onClick={handleClosePosition}
-                disabled={!positionId || !closeBtcAmount || isClosing || !fheReady}
+                disabled={!positionId || !closeUsdAmount || isClosing || !fheReady}
                 className="px-4 py-2 bg-destructive text-destructive-foreground rounded-md hover:bg-destructive/90 disabled:opacity-50"
               >
                 {isClosing ? '平仓中...' : 
                  !fheReady ? '等待 FHE 初始化...' : 
                  !positionId ? '请输入持仓 ID' :
-                 !closeBtcAmount ? '请输入平仓数量' :
+                 !closeUsdAmount ? '请输入平仓金额' :
                  '平仓'}
               </button>
             </div>
