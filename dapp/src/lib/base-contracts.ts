@@ -1,7 +1,7 @@
 // 合约配置
 export const CONTRACTS = {
     PRICE_ORACLE: {
-        address: '0x7fE9e41e405e52D5534E0959D3573F1015E0d979' as `0x${string}`,
+        address: '0x7cdc8EE2c834891E16C87c97c9933fB212d82144' as `0x${string}`,
         abi:[
           {
             "inputs": [
@@ -169,7 +169,7 @@ export const CONTRACTS = {
         ] as const
     },
     TRADER: {
-        address: '0x84A068202b1F52Cc76869a8777d2569C1cc4F87b' as `0x${string}`,
+        address: '0xA56c109905d464B11De03400FeC02E3E77e3a9b4' as `0x${string}`,
         abi:[
           {
             "inputs": [
@@ -633,6 +633,32 @@ export const CONTRACTS = {
             "type": "function"
           },
           {
+            "inputs": [],
+            "name": "getRevealedUsers",
+            "outputs": [
+              {
+                "internalType": "address[]",
+                "name": "users",
+                "type": "address[]"
+              }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+          },
+          {
+            "inputs": [],
+            "name": "getRevealedUsersCount",
+            "outputs": [
+              {
+                "internalType": "uint256",
+                "name": "count",
+                "type": "uint256"
+              }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+          },
+          {
             "inputs": [
               {
                 "internalType": "address",
@@ -776,32 +802,6 @@ export const CONTRACTS = {
             "name": "updatePriceOracle",
             "outputs": [],
             "stateMutability": "nonpayable",
-            "type": "function"
-          },
-          {
-            "inputs": [],
-            "name": "getRevealedUsersCount",
-            "outputs": [
-              {
-                "internalType": "uint256",
-                "name": "count",
-                "type": "uint256"
-              }
-            ],
-            "stateMutability": "view",
-            "type": "function"
-          },
-          {
-            "inputs": [],
-            "name": "getRevealedUsers",
-            "outputs": [
-              {
-                "internalType": "address[]",
-                "name": "users",
-                "type": "address[]"
-              }
-            ],
-            "stateMutability": "view",
             "type": "function"
           }
         ] as const

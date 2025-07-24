@@ -123,7 +123,7 @@ const ToastItem: React.FC<{ toast: ToastMessage }> = ({ toast }) => {
             {/* 交易哈希 */}
             {toast.txHash && (
               <p className="text-xs text-default-500 mt-2 font-mono">
-                交易: {toast.txHash}
+                tx: {toast.txHash}
               </p>
             )}
 
