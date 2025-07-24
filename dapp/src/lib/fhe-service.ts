@@ -202,7 +202,6 @@ export class FHEService {
     
     // 去除 0x 前缀
     const sig = signature.replace(/^0x/, "");
-console.log(sig,'???');
     // 4. 调用 FHEVM SDK 进行解密
     const handlePairs = handles.map(handle => ({ handle, contractAddress }));
     const results = await instance.userDecrypt(

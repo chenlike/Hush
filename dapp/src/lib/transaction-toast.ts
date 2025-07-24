@@ -4,7 +4,7 @@ import { TransactionStatus, TransactionState } from './contracts';
 
 export const useTransactionToast = (
   txState: TransactionState,
-  title: string = '合约交易'
+  title: string = 'Contract Transaction'
 ) => {
   const { updateToast, showTransactionToast, removeToast } = useToast();
   const toastIdRef = useRef<string | null>(null);
@@ -22,23 +22,23 @@ export const useTransactionToast = (
 
       switch (txState.status) {
         case TransactionStatus.PREPARING:
-          message = '准备交易参数...';
+          message = 'Preparing transaction ...';
           type = 'info';
           break;
         case TransactionStatus.PENDING:
-          message = '等待钱包确认...';
+          message = 'Waiting for wallet confirmation...';
           type = 'info';
           break;
         case TransactionStatus.CONFIRMING:
-          message = '区块链确认中...';
+          message = 'Confirming on blockchain...';
           type = 'info';
           break;
         case TransactionStatus.SUCCESS:
-          message = '交易成功完成！';
+          message = 'Transaction completed successfully!';
           type = 'success';
           break;
         case TransactionStatus.FAILED:
-          message = txState.error || '交易执行失败';
+          message = txState.error || 'Transaction failed';
           type = 'error';
           break;
         case TransactionStatus.IDLE:

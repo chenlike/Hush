@@ -27,16 +27,16 @@ interface PositionData extends DecryptedPositionInfo {
 interface PositionPanelProps {
   refreshTrigger?: number;
   registrationRefreshTrigger?: number;
+  onClosePositionRequest?: (positionId: string, contractCount: string) => void;
 }
 
-export const PositionPanel: React.FC<PositionPanelProps> = ({ refreshTrigger, registrationRefreshTrigger }) => {
+export const PositionPanel: React.FC<PositionPanelProps> = ({ refreshTrigger, registrationRefreshTrigger, onClosePositionRequest }) => {
   const { address, isConnected } = useAccount();
   const [positions, setPositions] = useState<PositionData[]>([]);
   const [selectedPosition, setSelectedPosition] = useState<string>('');
   const [isDecrypting, setIsDecrypting] = useState(false);
   const [isLoadingPositions, setIsLoadingPositions] = useState(false);
   const [isRegistered, setIsRegistered] = useState(false);
-  const [positionToClose, setPositionToClose] = useState<{id: string, contractCount: string} | null>(null);
 
   const contractActions = useTradingContractActions();
 
@@ -70,7 +70,6 @@ export const PositionPanel: React.FC<PositionPanelProps> = ({ refreshTrigger, re
       // Get details for each position
       const positionPromises = positionIds.map(async (id) => {
         const positionInfo = await contractActions.getPosition(id);
-        console.log('???!',positionInfo)
         if (positionInfo) {
           // Directly use the timestamp returned by the contract, convert to local time string
           const openTimestamp = positionInfo[5]; // openTimestamp is the 6th return value
@@ -152,24 +151,7 @@ export const PositionPanel: React.FC<PositionPanelProps> = ({ refreshTrigger, re
     }
   };
 
-  // Close position operation
-  const closePositionCall = useContractCall(
-    () => positionToClose ? contractActions.closePosition(positionToClose.id, positionToClose.contractCount) : Promise.reject('No position selected'),
-    {
-      title: 'Execute Close Position',
-      onSuccess: (receipt) => {
-        // Refresh position list
-        setTimeout(() => {
-          loadUserPositions();
-        }, 2000);
-        setPositionToClose(null);
-      },
-      onError: (error) => {
-        console.error('Failed to close position:', error);
-        setPositionToClose(null);
-      }
-    }
-  );
+
 
   // Check registration status and load positions
   useEffect(() => {
@@ -490,18 +472,16 @@ export const PositionPanel: React.FC<PositionPanelProps> = ({ refreshTrigger, re
                             variant="flat"
                             color="warning"
                             onPress={() => {
-                              setSelectedPosition(position.id);
                               // Use decrypted contract amount, or default value if not available
                               const contractCountToUse = position.contractCount || '1000';
-                              setPositionToClose({ 
-                                id: position.id, 
-                                contractCount: contractCountToUse 
-                              });
-                              closePositionCall.execute();
+                              
+                              // Call the parent's handler to fill TradingPanel form
+                              if (onClosePositionRequest) {
+                                onClosePositionRequest(position.id, contractCountToUse);
+                              }
                             }}
-                            isLoading={closePositionCall.isLoading && positionToClose?.id === position.id}
                           >
-                            Close
+                            Fill Close Form
                           </Button>
                         )}
                       </div>
@@ -522,6 +502,22 @@ export const PositionPanel: React.FC<PositionPanelProps> = ({ refreshTrigger, re
                   <p className="text-xs text-primary-600">
                     Position information is protected by FHE (Fully Homomorphic Encryption) technology. Before decryption, you can only see the entry price and time.
                     Click the "Decrypt" button to view complete position information, including direction and amount.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Close position workflow information */}
+            <div className="p-4 bg-warning-50 rounded-lg border border-warning-200">
+              <div className="flex items-start gap-3">
+                <div className="w-6 h-6 bg-warning-100 text-warning-700 rounded-full flex items-center justify-center text-xs font-semibold">
+                  💡
+                </div>
+                <div className="flex-1">
+                  <h4 className="text-sm font-semibold text-warning-700 mb-1">How to Close Position</h4>
+                  <p className="text-xs text-warning-600">
+                    After decrypting position information, click "Fill Close Form" to automatically populate the Trading Panel on the left.
+                    You can then review and modify the close amount before executing the transaction.
                   </p>
                 </div>
               </div>

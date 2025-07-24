@@ -15,9 +15,20 @@ import { useContractCall } from '@/lib/contract-hook';
 interface TradingPanelProps {
   onPositionUpdate?: () => void;
   registrationRefreshTrigger?: number;
+  closePositionData?: {
+    positionId: string;
+    contractCount: string;
+    timestamp: number;
+  } | null;
+  onClosePositionDataConsumed?: () => void;
 }
 
-export const TradingPanel: React.FC<TradingPanelProps> = ({ onPositionUpdate, registrationRefreshTrigger }) => {
+export const TradingPanel: React.FC<TradingPanelProps> = ({ 
+  onPositionUpdate, 
+  registrationRefreshTrigger,
+  closePositionData,
+  onClosePositionDataConsumed
+}) => {
   const { address, isConnected } = useAccount();
   const [amount, setAmount] = useState('1000');
   const [isLong, setIsLong] = useState(true);
@@ -28,8 +39,30 @@ export const TradingPanel: React.FC<TradingPanelProps> = ({ onPositionUpdate, re
   const [btcPrice, setBtcPrice] = useState<number | null>(null);
   const [isLoadingPrice, setIsLoadingPrice] = useState(false);
   const [lastPriceUpdate, setLastPriceUpdate] = useState<Date | null>(null);
+  const [showClosePositionTip, setShowClosePositionTip] = useState(false);
 
   const contractActions = useTradingContractActions();
+
+  // Handle close position data from PositionPanel
+  useEffect(() => {
+    if (closePositionData && closePositionData.positionId && closePositionData.contractCount) {
+      setPositionId(closePositionData.positionId);
+      setCloseAmount(closePositionData.contractCount);
+      setShowClosePositionTip(true);
+      
+      // Clear the data after consuming it
+      if (onClosePositionDataConsumed) {
+        onClosePositionDataConsumed();
+      }
+      
+      // Hide tip after 5 seconds
+      const timer = setTimeout(() => {
+        setShowClosePositionTip(false);
+      }, 5000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [closePositionData, onClosePositionDataConsumed]);
 
   // Check user registration status
   const checkRegistrationStatus = async () => {
@@ -307,6 +340,34 @@ export const TradingPanel: React.FC<TradingPanelProps> = ({ onPositionUpdate, re
               </Chip>
             )}
           </div>
+
+          {/* Auto-fill tip */}
+          {showClosePositionTip && (
+            <div className="p-3 bg-success-50 border border-success-200 rounded-lg">
+              <div className="flex items-start gap-3">
+                <div className="w-5 h-5 bg-success-100 text-success-700 rounded-full flex items-center justify-center text-xs font-semibold">
+                  ✓
+                </div>
+                <div className="flex-1">
+                  <h4 className="text-sm font-semibold text-success-700 mb-1">Position Information Auto-filled</h4>
+                  <p className="text-xs text-success-600">
+                    The position ID and contract amount have been automatically filled from your position list. 
+                    You can modify the amount if needed, then click "Close" to execute.
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="flat"
+                  color="success"
+                  isIconOnly
+                  onPress={() => setShowClosePositionTip(false)}
+                  className="min-w-unit-6 w-6 h-6"
+                >
+                  ×
+                </Button>
+              </div>
+            </div>
+          )}
           
           <div className="space-y-3">
             <Input

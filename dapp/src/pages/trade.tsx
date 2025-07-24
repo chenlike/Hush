@@ -16,6 +16,13 @@ export default function TradePage() {
   // Registration status refresh control
   const [registrationRefreshTrigger, setRegistrationRefreshTrigger] = useState(0);
   
+  // Close position data communication state
+  const [closePositionData, setClosePositionData] = useState<{
+    positionId: string;
+    contractCount: string;
+    timestamp: number;
+  } | null>(null);
+  
   // Function to trigger position refresh
   const triggerPositionRefresh = useCallback(() => {
     setPositionRefreshTrigger(prev => prev + 1);
@@ -24,6 +31,20 @@ export default function TradePage() {
   // Function to trigger registration status refresh (called when user completes registration)
   const triggerRegistrationRefresh = useCallback(() => {
     setRegistrationRefreshTrigger(prev => prev + 1);
+  }, []);
+
+  // Function to handle close position request from PositionPanel
+  const handleClosePositionRequest = useCallback((positionId: string, contractCount: string) => {
+    setClosePositionData({
+      positionId,
+      contractCount,
+      timestamp: Date.now()
+    });
+  }, []);
+
+  // Function to clear close position data (called after form is filled)
+  const clearClosePositionData = useCallback(() => {
+    setClosePositionData(null);
   }, []);
 
   return (
@@ -52,6 +73,8 @@ export default function TradePage() {
                 <TradingPanel 
                   onPositionUpdate={triggerPositionRefresh}
                   registrationRefreshTrigger={registrationRefreshTrigger}
+                  closePositionData={closePositionData}
+                  onClosePositionDataConsumed={clearClosePositionData}
                 />
               </div>
 
@@ -65,6 +88,7 @@ export default function TradePage() {
                   <PositionPanel 
                     refreshTrigger={positionRefreshTrigger}
                     registrationRefreshTrigger={registrationRefreshTrigger}
+                    onClosePositionRequest={handleClosePositionRequest}
                   />
                 </div>
               </div>
