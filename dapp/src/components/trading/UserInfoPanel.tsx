@@ -1,19 +1,72 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Card, 
   CardBody,
   Button,
+  Chip,
+  Divider,
+  Spinner
 } from '@heroui/react';
 import { useTradingContractActions } from '@/lib/contracts';
+import { useContractCall } from '@/lib/contract-hook';
 import { useAccount } from 'wagmi';
 import { UserRegistration } from './UserRegistration';
 
 export const UserInfoPanel: React.FC = () => {
   const { address, isConnected } = useAccount();
   const [balance, setBalance] = useState<string>('');
+  const [lastRevealInfo, setLastRevealInfo] = useState<any>(null);
   const [isDecryptingBalance, setIsDecryptingBalance] = useState(false);
+  const [isLoadingReveal, setIsLoadingReveal] = useState(false);
+  const [isRegistered, setIsRegistered] = useState(false);
+  const [isCheckingRegistration, setIsCheckingRegistration] = useState(false);
 
   const contractActions = useTradingContractActions();
+
+  // 检查用户注册状态
+  const checkRegistrationStatus = async () => {
+    if (!address) return;
+    
+    setIsCheckingRegistration(true);
+    try {
+      const registered = await contractActions.checkUserRegistration(address);
+      setIsRegistered(registered);
+    } catch (error) {
+      console.error('检查注册状态失败:', error);
+    } finally {
+      setIsCheckingRegistration(false);
+    }
+  };
+
+  // 余额揭示合约调用
+  const revealBalanceCall = useContractCall(contractActions.revealBalance, {
+    title: '余额揭示',
+    onSuccess: () => {
+      console.log('余额揭示成功');
+      // 揭示成功后，等待一段时间再获取最新的揭示信息
+      setTimeout(() => {
+        loadLatestBalanceReveal();
+      }, 2000);
+    },
+    onError: (error) => {
+      console.error('余额揭示失败:', error);
+    }
+  });
+
+  // 获取最新余额揭示信息
+  const loadLatestBalanceReveal = async () => {
+    if (!address) return;
+    
+    setIsLoadingReveal(true);
+    try {
+      const revealInfo = await contractActions.getLatestBalanceReveal(address);
+      setLastRevealInfo(revealInfo);
+    } catch (error) {
+      console.error('获取余额揭示信息失败:', error);
+    } finally {
+      setIsLoadingReveal(false);
+    }
+  };
 
   // 解密用户余额
   const handleDecryptBalance = async () => {
@@ -21,20 +74,25 @@ export const UserInfoPanel: React.FC = () => {
     
     setIsDecryptingBalance(true);
     try {
-      // 这里应该先从合约获取加密余额数据
-      // const encryptedBalance = await getEncryptedBalanceFromContract();
-      // const decryptedBalance = await contractActions.decryptBalance(encryptedBalance);
+      // 获取加密余额
+      const encryptedBalance = await contractActions.getUserBalance(address);
+      if (!encryptedBalance) {
+        throw new Error('无法获取加密余额');
+      }
       
-      // 模拟解密过程
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // 解密余额
+      const decryptedBalance = await contractActions.decryptBalance(encryptedBalance);
+      setBalance(decryptedBalance);
       
-      // 模拟解密结果
-      const mockDecryptedBalance = '15000.50';
-      setBalance(mockDecryptedBalance);
-      
-      console.log('余额解密成功:', mockDecryptedBalance);
-    } catch (error) {
+      console.log('余额解密成功:', decryptedBalance);
+    } catch (error: any) {
       console.error('余额解密失败:', error);
+      // 处理特定错误
+      if (error.message.includes('用户取消了签名')) {
+        // 用户取消签名，不显示错误
+        return;
+      }
+      // 其他错误可以在这里处理
     } finally {
       setIsDecryptingBalance(false);
     }
@@ -42,87 +100,125 @@ export const UserInfoPanel: React.FC = () => {
 
   // 刷新余额
   const handleRefreshBalance = async () => {
-    if (!address || !contractActions.walletClient) return;
-    
-    setIsDecryptingBalance(true);
-    try {
-      // 模拟刷新过程
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // 模拟刷新结果
-      const mockRefreshedBalance = '15200.75';
-      setBalance(mockRefreshedBalance);
-      
-      console.log('余额刷新成功:', mockRefreshedBalance);
-    } catch (error) {
-      console.error('余额刷新失败:', error);
-    } finally {
-      setIsDecryptingBalance(false);
+    await handleDecryptBalance();
+  };
+
+  // 页面加载时检查注册状态和获取余额信息
+  useEffect(() => {
+    if (isConnected && address) {
+      checkRegistrationStatus();
+    } else {
+      setIsRegistered(false);
     }
-  };
+  }, [isConnected, address]);
 
-  // 格式化地址显示
-  const formatAddress = (addr: string) => {
-    return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
-  };
-
-  // 如果未连接钱包，显示注册组件
-  if (!isConnected) {
-    return <UserRegistration />;
-  }
+  // 当注册状态确认后，获取余额信息
+  useEffect(() => {
+    if (isRegistered && address) {
+      loadLatestBalanceReveal();
+    }
+  }, [isRegistered, address]);
 
   return (
-    <Card className="w-full">
-      <CardBody className="p-4">
-        <div className="flex items-center justify-between">
-          {/* 地址显示 */}
-          <span className="text-sm font-mono text-default-600">
-            {address ? formatAddress(address) : '未连接钱包'}
-          </span>
-
-          {/* 右侧余额和解密功能 */}
-          <div className="flex items-center gap-3">
-            {!balance && (
-              <>
-                <span className="text-lg font-bold text-default-700">$****</span>
+    <div className="space-y-6">
+      {/* 用户注册状态 */}
+      <UserRegistration />
+      
+      {/* 余额信息 - 只在已注册时显示 */}
+      {isConnected && isRegistered && (
+        <Card>
+          <CardBody className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold">账户余额</h3>
+              <div className="flex gap-2">
                 <Button
                   size="sm"
                   variant="flat"
                   color="primary"
+                  onPress={revealBalanceCall.execute}
+                  isLoading={revealBalanceCall.isLoading}
+                >
+                  {revealBalanceCall.isLoading ? '揭示中...' : '余额揭示'}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="flat"
+                  color="secondary"
                   onPress={handleDecryptBalance}
                   isLoading={isDecryptingBalance}
                 >
                   {isDecryptingBalance ? '解密中...' : '解密余额'}
                 </Button>
-              </>
-            )}
+              </div>
+            </div>
             
-            {/* 解密后的余额显示和刷新按钮 */}
-            {balance && (
-              <>
-                <div className="text-right">
-                  <p className="text-sm font-semibold text-success-700">当前余额</p>
-                  <p className="text-lg font-bold text-success-800 font-mono">
-                    ${balance}
-                  </p>
+            <Divider />
+            
+            {/* 当前余额显示 */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-default-500">当前余额:</span>
+                <div className="flex items-center gap-2">
+                  {balance ? (
+                    <Chip color="success" variant="flat" size="sm">
+                      {balance} USD
+                    </Chip>
+                  ) : (
+                    <span className="text-sm text-default-400">未解密</span>
+                  )}
+                  {isDecryptingBalance && <Spinner size="sm" />}
                 </div>
-                <Button
-                  isIconOnly
-                  size="sm"
-                  variant="flat"
-                  color="primary"
-                  onPress={handleRefreshBalance}
-                  isLoading={isDecryptingBalance}
-                >
-                  <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M17.65 6.35A7.958 7.958 0 0012 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0112 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
-                  </svg>
-                </Button>
-              </>
-            )}
-          </div>
-        </div>
-      </CardBody>
-    </Card>
+              </div>
+
+              {/* 最新余额揭示信息 */}
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-default-500">最新揭示:</span>
+                <div className="flex items-center gap-2">
+                  {isLoadingReveal ? (
+                    <Spinner size="sm" />
+                  ) : lastRevealInfo ? (
+                    <div className="text-right">
+                      <div className="text-sm font-semibold">{lastRevealInfo.amount} USD</div>
+                      <div className="text-xs text-default-400">{lastRevealInfo.timestamp}</div>
+                    </div>
+                  ) : (
+                    <span className="text-sm text-default-400">暂无揭示记录</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* 操作说明 */}
+            <div className="p-3 bg-default-50 rounded-lg">
+              <p className="text-xs text-default-500">
+                💡 提示：余额揭示会将您的余额公开记录在区块链上，而解密余额只在本地查看。 揭示余额会有一定的延迟
+              </p>
+            </div>
+
+            {/* 刷新按钮 */}
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                onPress={handleRefreshBalance}
+                isLoading={isDecryptingBalance}
+                className="flex-1"
+              >
+                刷新余额
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onPress={loadLatestBalanceReveal}
+                isLoading={isLoadingReveal}
+                className="flex-1"
+              >
+                刷新揭示记录
+              </Button>
+            </div>
+          </CardBody>
+        </Card>
+      )}
+    </div>
   );
 };

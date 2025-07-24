@@ -170,26 +170,6 @@ export const TradingPanel: React.FC = () => {
           </div>
         </div>
 
-        <Divider />
-
-        {/* 余额管理区域 */}
-        <div className="space-y-3">
-          <h4 className="text-sm font-semibold text-default-600">余额管理</h4>
-          <Button
-            color="secondary"
-            variant="flat"
-            onPress={revealBalanceCall.execute}
-            isLoading={revealBalanceCall.isLoading}
-            size="sm"
-            className="w-full"
-          >
-            {revealBalanceCall.isLoading ? '揭示中...' : '公开余额到排行榜'}
-          </Button>
-          <p className="text-xs text-default-400 text-center">
-            公开余额后将出现在排行榜中
-          </p>
-        </div>
-
         {/* 操作状态显示 */}
         {(openPositionCall.hash || closePositionCall.hash || revealBalanceCall.hash) && (
           <>

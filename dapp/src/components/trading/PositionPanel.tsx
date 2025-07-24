@@ -16,6 +16,7 @@ import {
 } from '@heroui/react';
 import { useTradingContractActions, DecryptedPositionInfo } from '@/lib/contracts';
 import { useContractCall } from '@/lib/contract-hook';
+import { useAccount } from 'wagmi';
 
 interface PositionData extends DecryptedPositionInfo {
   id: string;
@@ -24,35 +25,79 @@ interface PositionData extends DecryptedPositionInfo {
 }
 
 export const PositionPanel: React.FC = () => {
+  const { address, isConnected } = useAccount();
   const [positions, setPositions] = useState<PositionData[]>([]);
   const [selectedPosition, setSelectedPosition] = useState<string>('');
   const [isDecrypting, setIsDecrypting] = useState(false);
+  const [isLoadingPositions, setIsLoadingPositions] = useState(false);
+  const [isRegistered, setIsRegistered] = useState(false);
 
   const contractActions = useTradingContractActions();
 
-  // 模拟获取持仓数据 - 在实际项目中这里应该是从合约读取数据
-  const mockPositions: PositionData[] = [
-    {
-      id: '1',
-      owner: contractActions.address || '',
-      contractCount: '1',
-      btcSize: '0.01000000',
-      entryPrice: '45000',
-      isLong: true,
-      isDecrypted: false,
-      entryTime: '2024-01-15 14:30:25'
-    },
-    {
-      id: '2', 
-      owner: contractActions.address || '',
-      contractCount: '2',
-      btcSize: '0.02000000',
-      entryPrice: '44500',
-      isLong: false,
-      isDecrypted: false,
-      entryTime: '2024-01-15 16:45:12'
+  // 检查用户注册状态
+  const checkRegistrationStatus = async () => {
+    if (!address) return;
+    
+    try {
+      const registered = await contractActions.checkUserRegistration(address);
+      setIsRegistered(registered);
+    } catch (error) {
+      console.error('检查注册状态失败:', error);
     }
-  ];
+  };
+
+  // 加载用户持仓
+  const loadUserPositions = async () => {
+    if (!address || !isRegistered) return;
+    
+    setIsLoadingPositions(true);
+    try {
+      // 获取用户持仓ID列表
+      const positionIds = await contractActions.getUserPositionIds(address);
+      
+      if (positionIds.length === 0) {
+        setPositions([]);
+        return;
+      }
+
+      console.log('获取到的持仓ID列表:', positionIds);
+
+      // 批量获取开仓时间
+      const openTimes = await contractActions.getMultiplePositionOpenTimes(positionIds, address);
+      console.log('获取到的开仓时间:', openTimes);
+
+      // 获取每个持仓的详情
+      const positionPromises = positionIds.map(async (id) => {
+        const positionInfo = await contractActions.getPosition(id);
+        if (positionInfo) {
+          const entryTime = openTimes[id] || new Date().toLocaleString();
+          console.log(`持仓 ${id} 的开仓时间:`, entryTime);
+          
+          return {
+            id,
+            owner: positionInfo[0],
+            contractCount: 'N/A', // 需要解密
+            btcSize: 'N/A', // 需要解密
+            entryPrice: String(positionInfo[3]), // 入场价格是明文的
+            isLong: false, // 需要解密
+            isDecrypted: false,
+            entryTime, // 使用从事件日志获取的真实时间
+          };
+        }
+        return null;
+      });
+
+      const loadedPositions = await Promise.all(positionPromises);
+      const validPositions = loadedPositions.filter(p => p !== null) as PositionData[];
+      
+      console.log('最终加载的持仓数据:', validPositions);
+      setPositions(validPositions);
+    } catch (error) {
+      console.error('加载持仓失败:', error);
+    } finally {
+      setIsLoadingPositions(false);
+    }
+  };
 
   // 解密持仓信息
   const decryptPosition = async (positionId: string) => {
@@ -60,23 +105,41 @@ export const PositionPanel: React.FC = () => {
     setSelectedPosition(positionId);
     
     try {
-      // 这里应该调用实际的合约方法获取加密数据
-      // const encryptedData = await getPositionFromContract(positionId);
-      // const decrypted = await contractActions.decryptPosition(encryptedData);
+      // 获取持仓的加密数据
+      const positionInfo = await contractActions.getPosition(positionId);
+      if (!positionInfo) {
+        throw new Error('无法获取持仓信息');
+      }
+
+      // 解密持仓信息
+      const decryptedInfo = await contractActions.decryptPosition(positionInfo);
       
-      // 模拟解密过程
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // 模拟解密成功，更新持仓状态
+      // 更新持仓状态
       setPositions(prev => prev.map(pos => 
         pos.id === positionId 
-          ? { ...pos, isDecrypted: true }
+          ? { 
+              ...pos, 
+              ...decryptedInfo,
+              isDecrypted: true,
+              error: decryptedInfo.error 
+            }
           : pos
       ));
       
       console.log(`解密持仓 ${positionId} 成功`);
-    } catch (error) {
+    } catch (error: any) {
       console.error('解密失败:', error);
+      
+      // 更新错误状态
+      setPositions(prev => prev.map(pos => 
+        pos.id === positionId 
+          ? { 
+              ...pos, 
+              error: error.message || '解密失败',
+              isDecrypted: false
+            }
+          : pos
+      ));
     } finally {
       setIsDecrypting(false);
       setSelectedPosition('');
@@ -85,21 +148,40 @@ export const PositionPanel: React.FC = () => {
 
   // 平仓操作
   const closePositionCall = useContractCall(
-    () => contractActions.closePosition(selectedPosition, '1000'),
+    () => contractActions.closePosition(selectedPosition, '1000'), // 这里的平仓金额可以让用户选择
     {
       title: '执行平仓',
       onSuccess: (receipt) => {
         console.log('平仓成功', receipt);
         // 刷新持仓列表
-        // refreshPositions();
+        setTimeout(() => {
+          loadUserPositions();
+        }, 2000);
+      },
+      onError: (error) => {
+        console.error('平仓失败:', error);
       }
     }
   );
 
+  // 检查注册状态和加载持仓
   useEffect(() => {
-    // 模拟加载持仓数据
-    setPositions(mockPositions);
-  }, [contractActions.address]);
+    if (isConnected && address) {
+      checkRegistrationStatus();
+    } else {
+      setIsRegistered(false);
+      setPositions([]);
+    }
+  }, [isConnected, address]);
+
+  // 当注册状态确认后，加载持仓
+  useEffect(() => {
+    if (isRegistered && address) {
+      loadUserPositions();
+    } else {
+      setPositions([]);
+    }
+  }, [isRegistered, address]);
 
   const getPositionTypeColor = (isLong: boolean) => {
     return isLong ? 'success' : 'danger';
@@ -111,14 +193,62 @@ export const PositionPanel: React.FC = () => {
 
   // 格式化时间显示
   const formatTime = (timeString: string) => {
-    const date = new Date(timeString);
-    return date.toLocaleString('zh-CN', {
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    try {
+      console.log('格式化时间输入:', timeString);
+      
+      const date = new Date(timeString);
+      console.log('解析后的日期对象:', date);
+      
+      // 检查是否为有效日期
+      if (isNaN(date.getTime())) {
+        console.log('无效日期，返回原字符串');
+        return timeString; // 如果不是有效日期，返回原字符串
+      }
+      
+      const now = new Date();
+      const diffInMs = now.getTime() - date.getTime();
+      const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
+      
+      console.log(`时间差: ${diffInMs}ms, ${diffInMinutes}分钟`);
+      
+      // 如果时间差为负数（未来时间），显示具体时间
+      if (diffInMinutes < 0) {
+        console.log('未来时间，显示具体日期');
+        return date.toLocaleString('zh-CN', {
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      }
+      
+      // 如果是今天的数据，显示相对时间
+      if (diffInMinutes < 1) {
+        return '刚刚';
+      } else if (diffInMinutes < 60) {
+        return `${diffInMinutes}分钟前`;
+      } else if (diffInMinutes < 24 * 60) {
+        const hours = Math.floor(diffInMinutes / 60);
+        return `${hours}小时前`;
+      } else {
+        // 超过一天的显示具体日期和时间
+        return date.toLocaleString('zh-CN', {
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      }
+    } catch (error) {
+      console.error('时间格式化错误:', error);
+      return timeString;
+    }
   };
+
+  // 如果用户未注册，不显示持仓面板
+  if (!isConnected || !isRegistered) {
+    return null;
+  }
 
   return (
     <Card className="w-full">
@@ -127,10 +257,26 @@ export const PositionPanel: React.FC = () => {
           <p className="text-md font-semibold">持仓管理</p>
           <p className="text-small text-default-500">查看和管理当前持仓</p>
         </div>
+        <div className="ml-auto">
+          <Button
+            size="sm"
+            variant="flat"
+            color="primary"
+            onPress={loadUserPositions}
+            isLoading={isLoadingPositions}
+          >
+            {isLoadingPositions ? '加载中...' : '刷新'}
+          </Button>
+        </div>
       </CardHeader>
       <Divider/>
       <CardBody>
-        {positions.length === 0 ? (
+        {isLoadingPositions ? (
+          <div className="flex flex-col items-center justify-center py-8">
+            <Spinner size="lg" />
+            <p className="text-sm text-default-500 mt-4">正在加载持仓数据...</p>
+          </div>
+        ) : positions.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-default-400">
             <p className="text-lg mb-2">暂无持仓</p>
             <p className="text-sm">开始交易后持仓将显示在这里</p>
@@ -204,12 +350,12 @@ export const PositionPanel: React.FC = () => {
                             color="primary"
                             onPress={() => decryptPosition(position.id)}
                             isLoading={isDecrypting && selectedPosition === position.id}
-                            isDisabled={isDecrypting}
+                            isDisabled={isDecrypting || !!position.error}
                           >
                             {isDecrypting && selectedPosition === position.id ? (
-                              <>
-                                解密中...
-                              </>
+                              '解密中...'
+                            ) : position.error ? (
+                              '解密失败'
                             ) : (
                               '解密'
                             )}
