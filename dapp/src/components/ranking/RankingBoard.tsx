@@ -65,7 +65,7 @@ export const RankingBoard: React.FC = () => {
     setIsLoading(true);
     try {
       const balanceReveals = await contractActions.getAllBalanceReveals();
-      
+      console.log(balanceReveals);
       if (balanceReveals && balanceReveals.length > 0) {
         // Convert data format and add ranking
         const rankingUsers: RankingUser[] = balanceReveals.map((reveal, index) => ({

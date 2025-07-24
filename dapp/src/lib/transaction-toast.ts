@@ -10,12 +10,12 @@ export const useTransactionToast = (
   const toastIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    // 如果交易开始，创建新的toast
+    // Create new toast when transaction starts
     if (txState.status === TransactionStatus.PREPARING && !toastIdRef.current) {
       toastIdRef.current = showTransactionToast(title);
     }
 
-    // 更新现有的toast状态
+    // Update existing toast status
     if (toastIdRef.current) {
       let message = '';
       let type: 'info' | 'success' | 'error' = 'info';
@@ -42,7 +42,7 @@ export const useTransactionToast = (
           type = 'error';
           break;
         case TransactionStatus.IDLE:
-          // 重置时清理toast
+          // Clean up toast when resetting
           if (toastIdRef.current) {
             removeToast(toastIdRef.current);
             toastIdRef.current = null;
@@ -59,7 +59,7 @@ export const useTransactionToast = (
     }
   }, [txState.status, txState.hash, txState.error, title, updateToast, showTransactionToast, removeToast]);
 
-  // 组件卸载时清理
+  // Clean up when component unmounts
   useEffect(() => {
     return () => {
       if (toastIdRef.current) {

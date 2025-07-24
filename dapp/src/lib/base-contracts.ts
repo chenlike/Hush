@@ -777,6 +777,32 @@ export const CONTRACTS = {
             "outputs": [],
             "stateMutability": "nonpayable",
             "type": "function"
+          },
+          {
+            "inputs": [],
+            "name": "getRevealedUsersCount",
+            "outputs": [
+              {
+                "internalType": "uint256",
+                "name": "count",
+                "type": "uint256"
+              }
+            ],
+            "stateMutability": "view",
+            "type": "function"
+          },
+          {
+            "inputs": [],
+            "name": "getRevealedUsers",
+            "outputs": [
+              {
+                "internalType": "address[]",
+                "name": "users",
+                "type": "address[]"
+              }
+            ],
+            "stateMutability": "view",
+            "type": "function"
           }
         ] as const
     }

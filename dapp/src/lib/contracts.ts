@@ -623,7 +623,7 @@ export const useTradingContractActions = () => {
     }
   }, [publicClient]);
 
-  // 获取所有BalanceRevealed事件用于排行榜
+    // 获取所有排行榜数据（先获取用户地址，再逐个获取余额数据）
   const getAllBalanceReveals = useCallback(async (): Promise<Array<{
     user: string;
     amount: number;
@@ -634,121 +634,73 @@ export const useTradingContractActions = () => {
     if (!publicClient) return null;
 
     try {
-      // 获取当前区块号，查询最近的5000个区块（避免免费RPC限制）
-      const currentBlock = await publicClient.getBlockNumber();
-      const fromBlock = currentBlock > 5000n ? currentBlock - 5000n : 0n;
+      console.log('获取所有已解密用户地址...');
       
-      console.log(`查询BalanceRevealed事件，区块范围: ${fromBlock} 到 ${currentBlock}`);
-      
-      // 获取所有BalanceRevealed事件
-      const logs = await publicClient.getContractEvents({
+      // 1. 先获取所有已解密的用户地址
+      const revealedUsers = await publicClient.readContract({
         address: CONTRACTS.TRADER.address,
         abi: CONTRACTS.TRADER.abi,
-        eventName: 'BalanceRevealed',
-        fromBlock,
-        toBlock: 'latest'
+        functionName: 'getRevealedUsers',
+        args: [],
       });
 
-      console.log(`获取到 ${logs.length} 个BalanceRevealed事件:`, logs);
+      if (!revealedUsers || !Array.isArray(revealedUsers) || revealedUsers.length === 0) {
+        console.log('没有找到已解密的用户:', revealedUsers);
+        return [];
+      }
 
-      // 处理事件数据，每个用户只保留最新的一条记录
-      const userBalances = new Map<string, {
-        user: string;
-        amount: number;
-        timestamp: number;
-        profit: number;
-        profitPercentage: number;
-      }>();
+      console.log(`找到 ${revealedUsers.length} 个已解密用户:`, revealedUsers);
 
-      logs.forEach(log => {
-        if (log.args && log.args.user && log.args.amount && log.args.timestamp) {
-          const user = log.args.user as string;
-          const amount = Number(log.args.amount);
-          const timestamp = Number(log.args.timestamp);
-          const initialAmount = 100000; // 初始余额
-          const profit = amount - initialAmount;
-          const profitPercentage = ((profit / initialAmount) * 100);
-
-          // 只保留每个用户最新的记录
-          const existing = userBalances.get(user);
-          if (!existing || timestamp > existing.timestamp) {
-            userBalances.set(user, {
-              user,
-              amount,
-              timestamp,
-              profit,
-              profitPercentage
-            });
-          }
-        }
-      });
-
-      // 转换为数组并按收益排序
-      const results = Array.from(userBalances.values()).sort((a, b) => b.profit - a.profit);
-      
-      console.log('处理后的排行榜数据:', results);
-      return results;
-    } catch (error: any) {
-      console.error('获取余额揭示事件失败:', error);
-      
-      // 如果还是因为区块范围问题失败，尝试更小的范围
-      if (error.message && error.message.includes('ranges over')) {
-        console.log('尝试使用更小的区块范围重试...');
+      // 2. 并行获取每个用户的余额解密数据
+      const balancePromises = revealedUsers.map(async (userAddress: string) => {
         try {
-          const currentBlock = await publicClient.getBlockNumber();
-          const fromBlock = currentBlock > 1000n ? currentBlock - 1000n : 0n;
-          
-          console.log(`备用查询区块范围: ${fromBlock} 到 ${currentBlock}`);
-          
-          const logs = await publicClient.getContractEvents({
+          const balanceReveal = await publicClient.readContract({
             address: CONTRACTS.TRADER.address,
             abi: CONTRACTS.TRADER.abi,
-            eventName: 'BalanceRevealed',
-            fromBlock,
-            toBlock: 'latest'
+            functionName: 'getLatestBalanceReveal',
+            args: [userAddress as `0x${string}`],
           });
 
-          console.log(`备用方案获取到 ${logs.length} 个BalanceRevealed事件`);
-
-          const userBalances = new Map<string, {
-            user: string;
-            amount: number;
-            timestamp: number;
-            profit: number;
-            profitPercentage: number;
-          }>();
-
-          logs.forEach(log => {
-            if (log.args && log.args.user && log.args.amount && log.args.timestamp) {
-              const user = log.args.user as string;
-              const amount = Number(log.args.amount);
-              const timestamp = Number(log.args.timestamp);
-              const initialAmount = 100000;
-              const profit = amount - initialAmount;
+          if (balanceReveal && Array.isArray(balanceReveal) && balanceReveal.length >= 2) {
+            const [amount, timestamp] = balanceReveal;
+            const amountNum = Number(amount);
+            const timestampNum = Number(timestamp);
+            
+            if (amountNum > 0) {
+              const initialAmount = 100000; // 初始余额
+              const profit = amountNum - initialAmount;
               const profitPercentage = ((profit / initialAmount) * 100);
 
-              const existing = userBalances.get(user);
-              if (!existing || timestamp > existing.timestamp) {
-                userBalances.set(user, {
-                  user,
-                  amount,
-                  timestamp,
-                  profit,
-                  profitPercentage
-                });
-              }
+              return {
+                user: userAddress,
+                amount: amountNum,
+                timestamp: timestampNum,
+                profit,
+                profitPercentage
+              };
             }
-          });
-
-          const results = Array.from(userBalances.values()).sort((a, b) => b.profit - a.profit);
-          console.log('备用方案处理后的排行榜数据:', results);
-          return results;
-        } catch (retryError) {
-          console.error('备用方案也失败:', retryError);
+          }
+          return null;
+        } catch (error) {
+          console.error(`获取用户 ${userAddress} 余额数据失败:`, error);
           return null;
         }
-      }
+      });
+
+      // 3. 等待所有余额数据获取完成
+      const balanceResults = await Promise.all(balancePromises);
       
+      // 4. 过滤掉无效数据
+      const validResults = balanceResults.filter(result => result !== null);
+      
+      // 5. 按收益从高到低排序
+      const sortedResults = validResults.sort((a, b) => b.profit - a.profit);
+      
+      console.log('处理后的排行榜数据:', sortedResults);
+      return sortedResults;
+
+    } catch (error: any) {
+      console.error('获取排行榜数据失败:', error);
       return null;
     }
   }, [publicClient]);
@@ -828,6 +780,24 @@ export const useTradingContractActions = () => {
     return null;
   };
 
+  // 获取已解密用户数量
+  const getRevealedUsersCount = useCallback(async (): Promise<number> => {
+    if (!publicClient) return 0;
+
+    try {
+      const count = await publicClient.readContract({
+        address: CONTRACTS.TRADER.address,
+        abi: CONTRACTS.TRADER.abi,
+        functionName: 'getRevealedUsersCount',
+        args: [],
+      });
+      return Number(count);
+    } catch (error) {
+      console.error('Failed to get revealed users count:', error);
+      return 0;
+    }
+  }, [publicClient]);
+
   return {
     address,
     walletClient,
@@ -845,6 +815,7 @@ export const useTradingContractActions = () => {
     getCurrentBtcPrice,
     getOracleBtcPrice,
     getAllBalanceReveals,
+    getRevealedUsersCount,
     decryptBalance,
     decryptPosition,
     formatBalanceReveal,

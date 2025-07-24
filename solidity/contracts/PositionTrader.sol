@@ -67,6 +67,9 @@ contract PositionTrader is SepoliaConfig, Ownable {
     mapping(address => uint256[]) private _userPositions;
     mapping(address => BalanceReveal) private _latestBalanceReveal;
     mapping(uint256 => DecryptionRequest) private _decryptionRequests;
+    
+    // 排行榜相关存储
+    address[] private _revealedUsers; // 所有进行过余额解密的用户地址
 
     // ============================
     // 事件定义
@@ -218,6 +221,19 @@ contract PositionTrader is SepoliaConfig, Ownable {
         DecryptionRequest memory request = _decryptionRequests[requestId];
         require(request.user != address(0), "Invalid request ID");
 
+        // 如果用户首次进行余额解密，将其添加到排行榜用户列表
+        bool userExists = false;
+        for (uint256 i = 0; i < _revealedUsers.length; i++) {
+            if (_revealedUsers[i] == request.user) {
+                userExists = true;
+                break;
+            }
+        }
+        
+        if (!userExists) {
+            _revealedUsers.push(request.user);
+        }
+
         // 更新用户的最新余额解密记录
         _latestBalanceReveal[request.user] = BalanceReveal({amount: decryptedAmount, timestamp: request.timestamp});
 
@@ -248,6 +264,22 @@ contract PositionTrader is SepoliaConfig, Ownable {
     ) external view returns (address user, uint256 timestamp, bool isCompleted) {
         DecryptionRequest memory request = _decryptionRequests[requestId];
         return (request.user, request.timestamp, request.user == address(0));
+    }
+
+
+    /**
+     * @notice 获取进行过余额解密的用户总数
+     * @return count 用户总数
+     */
+    function getRevealedUsersCount() external view returns (uint256 count) {
+        return _revealedUsers.length;
+    }
+    /**
+     * @notice 获取所有已进行余额解密的用户地址
+     * @return users 用户地址数组
+     */
+    function getRevealedUsers() external view returns (address[] memory users) {
+        return _revealedUsers;
     }
 
     // ============================

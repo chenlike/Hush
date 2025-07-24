@@ -11,6 +11,7 @@ import {
 import { useAccount } from 'wagmi';
 import { useTradingContractActions } from '@/lib/contracts';
 import { useContractCall } from '@/lib/contract-hook';
+import { RefreshIcon } from '@/components/icons';
 
 interface TradingPanelProps {
   onPositionUpdate?: () => void;
@@ -243,7 +244,7 @@ export const TradingPanel: React.FC<TradingPanelProps> = ({
               isLoading={isLoadingPrice}
               className="min-w-unit-8 w-8 h-8"
             >
-              {!isLoadingPrice && '🔄'}
+              {!isLoadingPrice && <RefreshIcon size={16} />}
             </Button>
           </div>
         </div>
