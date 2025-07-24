@@ -37,13 +37,13 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const newToast: ToastMessage = {
       ...toast,
       id,
-      duration: toast.duration || 5000,
+      duration: toast.duration || 0, // 默认不自动消失
     };
 
     setToasts(prev => [...prev, newToast]);
 
-    // 自动移除 toast（除非是持续显示的交易状态）
-    if (newToast.duration && newToast.duration > 0 && !newToast.txHash) {
+    // 只有明确设置了 duration > 0 且不是交易相关的 toast 才自动移除
+    if (newToast.duration && newToast.duration > 0 && !newToast.txHash && !newToast.status) {
       setTimeout(() => {
         removeToast(id);
       }, newToast.duration);

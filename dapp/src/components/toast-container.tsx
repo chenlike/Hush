@@ -2,6 +2,7 @@ import React from 'react';
 import { Card, CardBody, Button, Progress, Spinner } from "@heroui/react";
 import { useToast, ToastMessage } from '@/lib/toast';
 import { TransactionStatus } from '@/lib/contracts';
+import '@/styles/toast.css';
 
 const ToastItem: React.FC<{ toast: ToastMessage }> = ({ toast }) => {
   const { removeToast } = useToast();
@@ -100,7 +101,7 @@ const ToastItem: React.FC<{ toast: ToastMessage }> = ({ toast }) => {
 
   return (
     <Card 
-      className={`border-2 ${getToastColor()} shadow-lg animate-in slide-in-from-top-2 duration-300`}
+      className={`border-2 ${getToastColor()} shadow-lg animate-in slide-in-from-top-2 duration-300 toast-item`}
       shadow="md"
     >
       <CardBody className="py-4">
@@ -159,7 +160,7 @@ export const ToastContainer: React.FC = () => {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50 max-w-md w-full mx-4">
+    <div className="toast-container fixed-toast">
       <div className="space-y-2">
         {toasts.map(toast => (
           <ToastItem key={toast.id} toast={toast} />

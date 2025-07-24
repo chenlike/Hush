@@ -13,6 +13,7 @@ import {
   GithubIcon,
 } from "@/components/icons";
 import { FHEStatus } from "./fhe-status";
+import { ThemeSwitch } from "./theme-switch";
 
 export const Navbar = () => {
 
@@ -58,6 +59,9 @@ export const Navbar = () => {
           <Link isExternal href={siteConfig.links.github} title="GitHub">
             <GithubIcon className="text-default-500" />
           </Link>
+        </NavbarItem>
+        <NavbarItem>
+          <ThemeSwitch />
         </NavbarItem>
         <NavbarItem>
           <ConnectButton />

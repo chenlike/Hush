@@ -1,0 +1,30 @@
+/* Toast 容器样式 - 确保在所有情况下都固定在顶部 */
+.toast-container {
+  position: fixed !important;
+  top: 1rem !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  z-index: 99999 !important;
+  pointer-events: none !important;
+  max-width: 28rem !important;
+  width: 100% !important;
+  margin: 0 1rem !important;
+}
+
+.toast-container > div {
+  pointer-events: auto !important;
+}
+
+/* 确保 toast 不会被其他元素遮挡 */
+.toast-item {
+  position: relative !important;
+  z-index: 99999 !important;
+}
+
+/* 防止页面滚动时 toast 移动 */
+.toast-container.fixed-toast {
+  position: fixed !important;
+  top: 1rem !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+}

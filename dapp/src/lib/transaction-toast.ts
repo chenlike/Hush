@@ -36,24 +36,10 @@ export const useTransactionToast = (
         case TransactionStatus.SUCCESS:
           message = '交易成功完成！';
           type = 'success';
-          // 3秒后自动移除成功的toast
-          setTimeout(() => {
-            if (toastIdRef.current) {
-              removeToast(toastIdRef.current);
-              toastIdRef.current = null;
-            }
-          }, 3000);
           break;
         case TransactionStatus.FAILED:
           message = txState.error || '交易执行失败';
           type = 'error';
-          // 5秒后自动移除失败的toast
-          setTimeout(() => {
-            if (toastIdRef.current) {
-              removeToast(toastIdRef.current);
-              toastIdRef.current = null;
-            }
-          }, 5000);
           break;
         case TransactionStatus.IDLE:
           // 重置时清理toast

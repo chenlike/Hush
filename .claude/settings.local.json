@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rm:*)",
+      "Bash(rm -f \"E:\\GitRepos\\Hush\\dapp\\src\\components\\trading-example.tsx\")",
+      "Bash(find:*)"
+    ],
+    "deny": []
+  }
+}
