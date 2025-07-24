@@ -12,7 +12,15 @@ import { useContractCall } from '@/lib/contract-hook';
 import { useAccount } from 'wagmi';
 import { UserRegistration } from './UserRegistration';
 
-export const UserInfoPanel: React.FC = () => {
+interface UserInfoPanelProps {
+  onRegistrationComplete?: () => void;
+  registrationRefreshTrigger?: number;
+}
+
+export const UserInfoPanel: React.FC<UserInfoPanelProps> = ({ 
+  onRegistrationComplete, 
+  registrationRefreshTrigger 
+}) => {
   const { address, isConnected } = useAccount();
   const [balance, setBalance] = useState<string>('');
   const [lastRevealInfo, setLastRevealInfo] = useState<any>(null);
@@ -112,6 +120,13 @@ export const UserInfoPanel: React.FC = () => {
     }
   }, [isConnected, address]);
 
+  // 监听registrationRefreshTrigger，如果触发则重新检查注册状态
+  useEffect(() => {
+    if (registrationRefreshTrigger && isConnected && address) {
+      checkRegistrationStatus();
+    }
+  }, [registrationRefreshTrigger, isConnected, address]);
+
   // 当注册状态确认后，获取余额信息
   useEffect(() => {
     if (isRegistered && address) {
@@ -122,7 +137,10 @@ export const UserInfoPanel: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* 用户注册状态 */}
-      <UserRegistration />
+      <UserRegistration 
+        onRegistrationComplete={onRegistrationComplete} 
+        registrationRefreshTrigger={registrationRefreshTrigger} 
+      />
       
       {/* 余额信息 - 只在已注册时显示 */}
       {isConnected && isRegistered && (

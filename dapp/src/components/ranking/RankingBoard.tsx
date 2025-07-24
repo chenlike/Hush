@@ -13,119 +13,94 @@ import {
   Chip,
   Button,
   Divider,
-  Tabs,
-  Tab
+  Spinner
 } from '@heroui/react';
 import { Progress } from '@heroui/progress';
 import { useTradingContractActions } from '@/lib/contracts';
+import { useAccount } from 'wagmi';
 
 interface RankingUser {
   rank: number;
   address: string;
-  balance: string;
-  totalTrades: number;
-  winRate: number;
-  pnl: string;
+  balance: number;
+  profit: number;
+  profitPercentage: number;
   lastRevealTime: string;
   isCurrentUser?: boolean;
 }
 
 export const RankingBoard: React.FC = () => {
-  const [selectedTab, setSelectedTab] = useState('balance');
+  const { address, isConnected } = useAccount();
   const [rankings, setRankings] = useState<RankingUser[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [currentUserRank, setCurrentUserRank] = useState<RankingUser | null>(null);
+  const [lastUpdateTime, setLastUpdateTime] = useState<Date | null>(null);
 
   const contractActions = useTradingContractActions();
 
-  // 模拟排行榜数据
-  const mockRankings: RankingUser[] = [
-    {
-      rank: 1,
-      address: '0x1234...5678',
-      balance: '125,500.50',
-      totalTrades: 247,
-      winRate: 84,
-      pnl: '+$45,230.25',
-      lastRevealTime: '2 分钟前',
-    },
-    {
-      rank: 2,
-      address: '0xabcd...efgh',
-      balance: '98,750.00',
-      totalTrades: 189,
-      winRate: 78,
-      pnl: '+$32,150.75',
-      lastRevealTime: '5 分钟前',
-    },
-    {
-      rank: 3,
-      address: '0x9876...4321',
-      balance: '87,320.25',
-      totalTrades: 156,
-      winRate: 82,
-      pnl: '+$28,940.50',
-      lastRevealTime: '12 分钟前',
-    },
-    {
-      rank: 4,
-      address: contractActions.address || '0x5555...6666',
-      balance: '76,890.00',
-      totalTrades: 134,
-      winRate: 75,
-      pnl: '+$22,340.00',
-      lastRevealTime: '18 分钟前',
-      isCurrentUser: true,
-    },
-    {
-      rank: 5,
-      address: '0xdef0...1234',
-      balance: '65,420.75',
-      totalTrades: 98,
-      winRate: 73,
-      pnl: '+$18,750.25',
-      lastRevealTime: '25 分钟前',
-    },
-    {
-      rank: 6,
-      address: '0x7890...abcd',
-      balance: '54,680.50',
-      totalTrades: 87,
-      winRate: 69,
-      pnl: '+$15,230.80',
-      lastRevealTime: '31 分钟前',
-    },
-    {
-      rank: 7,
-      address: '0x3456...7890',
-      balance: '48,920.25',
-      totalTrades: 76,
-      winRate: 71,
-      pnl: '+$12,890.45',
-      lastRevealTime: '45 分钟前',
-    },
-    {
-      rank: 8,
-      address: '0xbcde...f012',
-      balance: '42,150.00',
-      totalTrades: 65,
-      winRate: 68,
-      pnl: '+$9,450.30',
-      lastRevealTime: '1 小时前',
-    },
-  ];
+  // 格式化时间显示
+  const formatTime = (timestamp: number) => {
+    const date = new Date(timestamp * 1000);
+    const now = new Date();
+    const diffInMs = now.getTime() - date.getTime();
+    const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
+    
+    if (diffInMinutes < 1) {
+      return '刚刚';
+    } else if (diffInMinutes < 60) {
+      return `${diffInMinutes}分钟前`;
+    } else if (diffInMinutes < 24 * 60) {
+      const hours = Math.floor(diffInMinutes / 60);
+      return `${hours}小时前`;
+    } else {
+      const days = Math.floor(diffInMinutes / (24 * 60));
+      return `${days}天前`;
+    }
+  };
+
+  // 加载排行榜数据
+  const loadRankingData = async () => {
+    if (!isConnected) return;
+    
+    setIsLoading(true);
+    try {
+      const balanceReveals = await contractActions.getAllBalanceReveals();
+      
+      if (balanceReveals && balanceReveals.length > 0) {
+        // 转换数据格式并添加排名
+        const rankingUsers: RankingUser[] = balanceReveals.map((reveal, index) => ({
+          rank: index + 1,
+          address: reveal.user,
+          balance: reveal.amount,
+          profit: reveal.profit,
+          profitPercentage: reveal.profitPercentage,
+          lastRevealTime: formatTime(reveal.timestamp),
+          isCurrentUser: reveal.user.toLowerCase() === address?.toLowerCase()
+        }));
+
+        setRankings(rankingUsers);
+        
+        // 设置当前用户排名
+        const userRank = rankingUsers.find(user => user.isCurrentUser);
+        setCurrentUserRank(userRank || null);
+        
+        setLastUpdateTime(new Date());
+      } else {
+        setRankings([]);
+        setCurrentUserRank(null);
+      }
+    } catch (error) {
+      console.error('加载排行榜数据失败:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    // 模拟加载排行榜数据
-    setIsLoading(true);
-    setTimeout(() => {
-      setRankings(mockRankings);
-      // 设置当前用户排名
-      const userRank = mockRankings.find(user => user.isCurrentUser);
-      setCurrentUserRank(userRank || null);
-      setIsLoading(false);
-    }, 1500);
-  }, [contractActions.address]);
+    if (isConnected) {
+      loadRankingData();
+    }
+  }, [isConnected, address]);
 
   const formatAddress = (address: string) => {
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
@@ -157,19 +132,23 @@ export const RankingBoard: React.FC = () => {
     }
   };
 
-  const getSortedRankings = () => {
-    switch (selectedTab) {
-      case 'balance':
-        return [...rankings].sort((a, b) => parseFloat(b.balance.replace(/,/g, '')) - parseFloat(a.balance.replace(/,/g, '')));
-      case 'trades':
-        return [...rankings].sort((a, b) => b.totalTrades - a.totalTrades);
-      case 'winrate':
-        return [...rankings].sort((a, b) => b.winRate - a.winRate);
-      case 'pnl':
-        return [...rankings].sort((a, b) => parseFloat(b.pnl.replace(/[+$,]/g, '')) - parseFloat(a.pnl.replace(/[+$,]/g, '')));
-      default:
-        return rankings;
-    }
+  const formatBalance = (balance: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(balance);
+  };
+
+  const formatProfit = (profit: number) => {
+    const sign = profit >= 0 ? '+' : '';
+    return `${sign}${formatBalance(profit)}`;
+  };
+
+  const formatProfitPercentage = (percentage: number) => {
+    const sign = percentage >= 0 ? '+' : '';
+    return `${sign}${percentage.toFixed(2)}%`;
   };
 
   return (
@@ -196,20 +175,24 @@ export const RankingBoard: React.FC = () => {
           <CardBody>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="text-center">
-                <p className="text-xl font-bold text-primary-700">${currentUserRank.balance}</p>
-                <p className="text-xs text-primary-500">余额</p>
+                <p className="text-xl font-bold text-primary-700">{formatBalance(currentUserRank.balance)}</p>
+                <p className="text-xs text-primary-500">当前余额</p>
               </div>
               <div className="text-center">
-                <p className="text-xl font-bold text-primary-700">{currentUserRank.totalTrades}</p>
-                <p className="text-xs text-primary-500">交易数</p>
+                <p className={`text-xl font-bold ${currentUserRank.profit >= 0 ? 'text-success-600' : 'text-danger-600'}`}>
+                  {formatProfit(currentUserRank.profit)}
+                </p>
+                <p className="text-xs text-primary-500">总盈亏</p>
               </div>
               <div className="text-center">
-                <p className="text-xl font-bold text-primary-700">{currentUserRank.winRate}%</p>
-                <p className="text-xs text-primary-500">胜率</p>
+                <p className={`text-xl font-bold ${currentUserRank.profitPercentage >= 0 ? 'text-success-600' : 'text-danger-600'}`}>
+                  {formatProfitPercentage(currentUserRank.profitPercentage)}
+                </p>
+                <p className="text-xs text-primary-500">收益率</p>
               </div>
               <div className="text-center">
-                <p className="text-xl font-bold text-success-600">{currentUserRank.pnl}</p>
-                <p className="text-xs text-primary-500">盈亏</p>
+                <p className="text-xl font-bold text-primary-700">{currentUserRank.lastRevealTime}</p>
+                <p className="text-xs text-primary-500">最后更新</p>
               </div>
             </div>
           </CardBody>
@@ -219,129 +202,148 @@ export const RankingBoard: React.FC = () => {
       {/* 排行榜主体 */}
       <Card>
         <CardHeader className="flex gap-3">
-          <div className="flex flex-col">
+          <div className="flex flex-col flex-1">
             <p className="text-md font-semibold">🏆 交易排行榜</p>
             <p className="text-small text-default-500">基于公开余额的实时排名</p>
           </div>
+          {lastUpdateTime && (
+            <div className="text-right">
+              <p className="text-xs text-default-400">
+                最后更新: {lastUpdateTime.toLocaleTimeString('zh-CN')}
+              </p>
+              <p className="text-xs text-default-400">
+                共 {rankings.length} 位用户
+              </p>
+            </div>
+          )}
         </CardHeader>
         <Divider/>
         <CardBody>
-          {/* 排序选项卡 */}
-          <Tabs 
-            selectedKey={selectedTab} 
-            onSelectionChange={(key) => setSelectedTab(key as string)}
-            className="mb-4"
-          >
-            <Tab key="balance" title="余额排名" />
-            <Tab key="trades" title="交易量" />
-            <Tab key="winrate" title="胜率" />
-            <Tab key="pnl" title="盈亏" />
-          </Tabs>
-
-          {/* 排行榜表格 */}
-          <Table 
-            aria-label="排行榜"
-            classNames={{
-              wrapper: "min-h-[400px]",
-            }}
-          >
-            <TableHeader>
-              <TableColumn>排名</TableColumn>
-              <TableColumn>用户</TableColumn>
-              <TableColumn>余额</TableColumn>
-              <TableColumn>交易数</TableColumn>
-              <TableColumn>胜率</TableColumn>
-              <TableColumn>盈亏</TableColumn>
-              <TableColumn>更新时间</TableColumn>
-            </TableHeader>
-            <TableBody isLoading={isLoading}>
-              {getSortedRankings().map((user, index) => (
-                <TableRow 
-                  key={user.address}
-                  className={user.isCurrentUser ? "bg-primary-50" : ""}
-                >
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Chip 
-                        color={getRankColor(index + 1)} 
-                        variant="flat"
-                        size="sm"
-                      >
-                        {getRankIcon(index + 1)}
-                      </Chip>
-                      {user.isCurrentUser && (
-                        <Chip color="primary" variant="solid" size="sm">
-                          您
+          {/* 空状态或加载状态 */}
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center py-12">
+              <Spinner size="lg" />
+              <p className="text-sm text-default-500 mt-4">正在加载排行榜数据...</p>
+            </div>
+          ) : rankings.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-default-400">
+              <div className="text-6xl mb-4">📊</div>
+              <h3 className="text-lg font-semibold mb-2">暂无排行数据</h3>
+              <p className="text-sm text-center max-w-md">
+                还没有用户公开余额。成为第一个公开余额的用户吧！
+              </p>
+              <p className="text-xs text-center mt-2 text-default-400">
+                在用户信息面板中点击"余额揭示"来公开您的余额
+              </p>
+            </div>
+          ) : (
+            /* 排行榜表格 */
+            <Table 
+              aria-label="排行榜"
+              classNames={{
+                wrapper: "min-h-[400px]",
+              }}
+            >
+              <TableHeader>
+                <TableColumn>排名</TableColumn>
+                <TableColumn>用户地址</TableColumn>
+                <TableColumn>当前余额</TableColumn>
+                <TableColumn>总盈亏</TableColumn>
+                <TableColumn>收益率</TableColumn>
+                <TableColumn>最后更新</TableColumn>
+              </TableHeader>
+              <TableBody>
+                {rankings.map((user) => (
+                  <TableRow 
+                    key={user.address}
+                    className={user.isCurrentUser ? "bg-primary-50 border border-primary-200" : ""}
+                  >
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Chip 
+                          color={getRankColor(user.rank)} 
+                          variant={user.rank <= 3 ? "solid" : "flat"}
+                          size="sm"
+                        >
+                          {getRankIcon(user.rank)}
                         </Chip>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <Avatar 
-                        name={formatAddress(user.address)}
-                        size="sm"
-                        className="flex-shrink-0"
-                        showFallback
-                        fallback={
-                          <div className="w-full h-full bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center">
-                            <span className="text-white text-xs font-bold">
-                              {user.address.slice(2, 4).toUpperCase()}
-                            </span>
-                          </div>
-                        }
-                      />
-                      <span className="font-mono text-sm">
-                        {formatAddress(user.address)}
+                        {user.isCurrentUser && (
+                          <Chip color="primary" variant="solid" size="sm">
+                            您
+                          </Chip>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <Avatar 
+                          name={formatAddress(user.address)}
+                          size="sm"
+                          className="flex-shrink-0"
+                          showFallback
+                          fallback={
+                            <div className="w-full h-full bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center">
+                              <span className="text-white text-xs font-bold">
+                                {user.address.slice(2, 4).toUpperCase()}
+                              </span>
+                            </div>
+                          }
+                        />
+                        <span className="font-mono text-sm">
+                          {formatAddress(user.address)}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <span className="font-mono font-semibold">
+                        {formatBalance(user.balance)}
                       </span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <span className="font-mono font-semibold">
-                      ${user.balance}
-                    </span>
-                  </TableCell>
-                  <TableCell>{user.totalTrades}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold">{user.winRate}%</span>
-                      <Progress 
-                        value={user.winRate} 
-                        color="success"
-                        size="sm"
-                        className="w-16"
-                      />
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <span className={`font-mono font-semibold ${
-                      user.pnl.startsWith('+') ? 'text-success-600' : 'text-danger-600'
-                    }`}>
-                      {user.pnl}
-                    </span>
-                  </TableCell>
-                  <TableCell>
-                    <span className="text-sm text-default-500">
-                      {user.lastRevealTime}
-                    </span>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                    </TableCell>
+                    <TableCell>
+                      <span className={`font-mono font-semibold ${
+                        user.profit >= 0 ? 'text-success-600' : 'text-danger-600'
+                      }`}>
+                        {formatProfit(user.profit)}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <span className={`font-semibold ${
+                          user.profitPercentage >= 0 ? 'text-success-600' : 'text-danger-600'
+                        }`}>
+                          {formatProfitPercentage(user.profitPercentage)}
+                        </span>
+                        {user.profitPercentage !== 0 && (
+                          <Progress 
+                            value={Math.min(Math.abs(user.profitPercentage), 100)} 
+                            color={user.profitPercentage >= 0 ? "success" : "danger"}
+                            size="sm"
+                            className="w-16"
+                          />
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-sm text-default-500">
+                        {user.lastRevealTime}
+                      </span>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
 
           {/* 刷新按钮 */}
           <div className="flex justify-center mt-4">
             <Button
               color="primary"
               variant="flat"
-              onPress={() => {
-                setIsLoading(true);
-                setTimeout(() => setIsLoading(false), 1000);
-              }}
+              onPress={loadRankingData}
               isLoading={isLoading}
+              isDisabled={!isConnected}
             >
-              刷新排行榜
+              {isLoading ? '加载中...' : '刷新排行榜'}
             </Button>
           </div>
         </CardBody>
@@ -352,12 +354,14 @@ export const RankingBoard: React.FC = () => {
         <CardBody>
           <div className="text-center space-y-2">
             <h4 className="font-semibold text-default-700">📊 排行榜说明</h4>
-            <p className="text-sm text-default-500">
-              排行榜基于用户主动揭示的余额进行排名，只有选择公开余额的用户才会出现在榜单中。
-              数据实时更新，展示真实的交易实力。
-            </p>
-            <p className="text-xs text-default-400">
-              * 余额数据通过同态加密技术保护，确保隐私和安全
+            <div className="space-y-1 text-sm text-default-500">
+              <p>• 排行榜基于用户主动揭示的余额进行排名，按照收益从高到低排序</p>
+              <p>• 初始余额为 $100,000，收益 = 当前余额 - 初始余额</p>
+              <p>• 只有选择公开余额的用户才会出现在榜单中</p>
+              <p>• 每位用户只显示最新的一次余额揭示记录</p>
+            </div>
+            <p className="text-xs text-default-400 pt-2">
+              * 余额数据通过 FHE 同态加密技术保护，确保隐私和安全
             </p>
           </div>
         </CardBody>

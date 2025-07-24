@@ -158,9 +158,10 @@ contract PositionTrader is SepoliaConfig, Ownable {
      */
     function getPosition(
         uint256 positionId
-    ) external view returns (address owner, euint64 contractCount, euint64 btcSize, uint64 entryPrice, ebool isLong) {
+    ) external view returns (address owner, euint64 contractCount, euint64 btcSize, uint64 entryPrice, ebool isLong,uint256 openTimestamp) {
         Position memory pos = _positions[positionId];
-        return (pos.owner, pos.contractCount, pos.btcSize, pos.entryPrice, pos.isLong);
+        
+        return (pos.owner, pos.contractCount, pos.btcSize, pos.entryPrice, pos.isLong,pos.openTimestamp);
     }
 
     /**

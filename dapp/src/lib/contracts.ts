@@ -587,6 +587,172 @@ export const useTradingContractActions = () => {
     });
   }, [address, writeContractAsync]);
 
+  // 获取当前BTC价格（从Trader合约）
+  const getCurrentBtcPrice = useCallback(async (): Promise<number | null> => {
+    if (!publicClient) return null;
+
+    try {
+      const price = await publicClient.readContract({
+        address: CONTRACTS.TRADER.address,
+        abi: CONTRACTS.TRADER.abi,
+        functionName: 'getCurrentBtcPrice',
+        args: [],
+      });
+      return Number(price);
+    } catch (error) {
+      console.error('获取BTC价格失败:', error);
+      return null;
+    }
+  }, [publicClient]);
+
+  // 获取PriceOracle的BTC价格
+  const getOracleBtcPrice = useCallback(async (): Promise<number | null> => {
+    if (!publicClient) return null;
+
+    try {
+      const price = await publicClient.readContract({
+        address: CONTRACTS.PRICE_ORACLE.address,
+        abi: CONTRACTS.PRICE_ORACLE.abi,
+        functionName: 'getLatestBtcPrice',
+        args: [],
+      });
+      return Number(price);
+    } catch (error) {
+      console.error('获取Oracle BTC价格失败:', error);
+      return null;
+    }
+  }, [publicClient]);
+
+  // 获取所有BalanceRevealed事件用于排行榜
+  const getAllBalanceReveals = useCallback(async (): Promise<Array<{
+    user: string;
+    amount: number;
+    timestamp: number;
+    profit: number;
+    profitPercentage: number;
+  }> | null> => {
+    if (!publicClient) return null;
+
+    try {
+      // 获取当前区块号，查询最近的5000个区块（避免免费RPC限制）
+      const currentBlock = await publicClient.getBlockNumber();
+      const fromBlock = currentBlock > 5000n ? currentBlock - 5000n : 0n;
+      
+      console.log(`查询BalanceRevealed事件，区块范围: ${fromBlock} 到 ${currentBlock}`);
+      
+      // 获取所有BalanceRevealed事件
+      const logs = await publicClient.getContractEvents({
+        address: CONTRACTS.TRADER.address,
+        abi: CONTRACTS.TRADER.abi,
+        eventName: 'BalanceRevealed',
+        fromBlock,
+        toBlock: 'latest'
+      });
+
+      console.log(`获取到 ${logs.length} 个BalanceRevealed事件:`, logs);
+
+      // 处理事件数据，每个用户只保留最新的一条记录
+      const userBalances = new Map<string, {
+        user: string;
+        amount: number;
+        timestamp: number;
+        profit: number;
+        profitPercentage: number;
+      }>();
+
+      logs.forEach(log => {
+        if (log.args && log.args.user && log.args.amount && log.args.timestamp) {
+          const user = log.args.user as string;
+          const amount = Number(log.args.amount);
+          const timestamp = Number(log.args.timestamp);
+          const initialAmount = 100000; // 初始余额
+          const profit = amount - initialAmount;
+          const profitPercentage = ((profit / initialAmount) * 100);
+
+          // 只保留每个用户最新的记录
+          const existing = userBalances.get(user);
+          if (!existing || timestamp > existing.timestamp) {
+            userBalances.set(user, {
+              user,
+              amount,
+              timestamp,
+              profit,
+              profitPercentage
+            });
+          }
+        }
+      });
+
+      // 转换为数组并按收益排序
+      const results = Array.from(userBalances.values()).sort((a, b) => b.profit - a.profit);
+      
+      console.log('处理后的排行榜数据:', results);
+      return results;
+    } catch (error: any) {
+      console.error('获取余额揭示事件失败:', error);
+      
+      // 如果还是因为区块范围问题失败，尝试更小的范围
+      if (error.message && error.message.includes('ranges over')) {
+        console.log('尝试使用更小的区块范围重试...');
+        try {
+          const currentBlock = await publicClient.getBlockNumber();
+          const fromBlock = currentBlock > 1000n ? currentBlock - 1000n : 0n;
+          
+          console.log(`备用查询区块范围: ${fromBlock} 到 ${currentBlock}`);
+          
+          const logs = await publicClient.getContractEvents({
+            address: CONTRACTS.TRADER.address,
+            abi: CONTRACTS.TRADER.abi,
+            eventName: 'BalanceRevealed',
+            fromBlock,
+            toBlock: 'latest'
+          });
+
+          console.log(`备用方案获取到 ${logs.length} 个BalanceRevealed事件`);
+
+          const userBalances = new Map<string, {
+            user: string;
+            amount: number;
+            timestamp: number;
+            profit: number;
+            profitPercentage: number;
+          }>();
+
+          logs.forEach(log => {
+            if (log.args && log.args.user && log.args.amount && log.args.timestamp) {
+              const user = log.args.user as string;
+              const amount = Number(log.args.amount);
+              const timestamp = Number(log.args.timestamp);
+              const initialAmount = 100000;
+              const profit = amount - initialAmount;
+              const profitPercentage = ((profit / initialAmount) * 100);
+
+              const existing = userBalances.get(user);
+              if (!existing || timestamp > existing.timestamp) {
+                userBalances.set(user, {
+                  user,
+                  amount,
+                  timestamp,
+                  profit,
+                  profitPercentage
+                });
+              }
+            }
+          });
+
+          const results = Array.from(userBalances.values()).sort((a, b) => b.profit - a.profit);
+          console.log('备用方案处理后的排行榜数据:', results);
+          return results;
+        } catch (retryError) {
+          console.error('备用方案也失败:', retryError);
+          return null;
+        }
+      }
+      
+      return null;
+    }
+  }, [publicClient]);
+
   const decryptBalance = async (encryptedBalance: any): Promise<string> => {
     if (!encryptedBalance || !address || !walletClient) throw new Error('解密余额前置条件不满足');
 
@@ -676,6 +842,9 @@ export const useTradingContractActions = () => {
     openPosition,
     closePosition,
     revealBalance,
+    getCurrentBtcPrice,
+    getOracleBtcPrice,
+    getAllBalanceReveals,
     decryptBalance,
     decryptPosition,
     formatBalanceReveal,

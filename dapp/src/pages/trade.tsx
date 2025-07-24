@@ -13,9 +13,17 @@ export default function TradePage() {
   // 持仓刷新控制状态
   const [positionRefreshTrigger, setPositionRefreshTrigger] = useState(0);
   
+  // 注册状态刷新控制
+  const [registrationRefreshTrigger, setRegistrationRefreshTrigger] = useState(0);
+  
   // 触发持仓刷新的函数
   const triggerPositionRefresh = useCallback(() => {
     setPositionRefreshTrigger(prev => prev + 1);
+  }, []);
+
+  // 触发注册状态刷新的函数（当用户完成注册时调用）
+  const triggerRegistrationRefresh = useCallback(() => {
+    setRegistrationRefreshTrigger(prev => prev + 1);
   }, []);
 
   return (
@@ -41,14 +49,23 @@ export default function TradePage() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* 左侧列 - 交易面板 */}
               <div className="lg:col-span-1">
-                <TradingPanel onPositionUpdate={triggerPositionRefresh} />
+                <TradingPanel 
+                  onPositionUpdate={triggerPositionRefresh}
+                  registrationRefreshTrigger={registrationRefreshTrigger}
+                />
               </div>
 
               {/* 右侧列 - 用户信息和持仓管理 */}
               <div className="lg:col-span-2">
                 <div className="space-y-6">
-                  <UserInfoPanel />
-                  <PositionPanel refreshTrigger={positionRefreshTrigger} />
+                  <UserInfoPanel 
+                    onRegistrationComplete={triggerRegistrationRefresh}
+                    registrationRefreshTrigger={registrationRefreshTrigger}
+                  />
+                  <PositionPanel 
+                    refreshTrigger={positionRefreshTrigger}
+                    registrationRefreshTrigger={registrationRefreshTrigger}
+                  />
                 </div>
               </div>
             </div>

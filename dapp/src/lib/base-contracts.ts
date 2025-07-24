@@ -1,7 +1,7 @@
 // 合约配置
 export const CONTRACTS = {
     PRICE_ORACLE: {
-        address: '0x25c983f7771fAF0335B41BE8763580f779D82Ae6' as `0x${string}`,
+        address: '0xce618b058b7136864f92172581d98324b2fD9A10' as `0x${string}`,
         abi:[
           {
             "inputs": [
@@ -169,7 +169,7 @@ export const CONTRACTS = {
         ] as const
     },
     TRADER: {
-        address: '0xbC04fC2385e07C756FD7c3fb13c763D40799C11C' as `0x${string}`,
+        address: '0x9CAca2B2586a1b64bDB2079EFA955F37C5BCEa49' as `0x${string}`,
         abi: [
           {
             "inputs": [

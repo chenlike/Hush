@@ -10,7 +10,15 @@ import { useTradingContractActions } from '@/lib/contracts';
 import { useContractCall } from '@/lib/contract-hook';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 
-export const UserRegistration: React.FC = () => {
+interface UserRegistrationProps {
+  onRegistrationComplete?: () => void;
+  registrationRefreshTrigger?: number;
+}
+
+export const UserRegistration: React.FC<UserRegistrationProps> = ({ 
+  onRegistrationComplete, 
+  registrationRefreshTrigger 
+}) => {
   const { address, isConnected } = useAccount();
   const [isRegistered, setIsRegistered] = useState(false);
   const [isCheckingRegistration, setIsCheckingRegistration] = useState(false);
@@ -22,6 +30,8 @@ export const UserRegistration: React.FC = () => {
     title: '用户注册',
     onSuccess: () => {
       setIsRegistered(true);
+      // 调用父组件的回调函数通知注册完成
+      onRegistrationComplete?.();
     },
     onError: (error) => {
       console.error('注册失败:', error);
@@ -51,6 +61,13 @@ export const UserRegistration: React.FC = () => {
       setIsRegistered(false);
     }
   }, [isConnected, address]);
+
+  // 监听registrationRefreshTrigger，如果触发则重新检查注册状态
+  useEffect(() => {
+    if (registrationRefreshTrigger && isConnected && address) {
+      checkRegistrationStatus();
+    }
+  }, [registrationRefreshTrigger, isConnected, address]);
 
   // 格式化地址显示
   const formatAddress = (addr: string) => {

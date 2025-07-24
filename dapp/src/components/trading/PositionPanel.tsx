@@ -24,7 +24,12 @@ interface PositionData extends DecryptedPositionInfo {
   entryTime: string;
 }
 
-export const PositionPanel: React.FC = () => {
+interface PositionPanelProps {
+  refreshTrigger?: number;
+  registrationRefreshTrigger?: number;
+}
+
+export const PositionPanel: React.FC<PositionPanelProps> = ({ refreshTrigger, registrationRefreshTrigger }) => {
   const { address, isConnected } = useAccount();
   const [positions, setPositions] = useState<PositionData[]>([]);
   const [selectedPosition, setSelectedPosition] = useState<string>('');
@@ -67,6 +72,7 @@ export const PositionPanel: React.FC = () => {
       // 获取每个持仓的详情
       const positionPromises = positionIds.map(async (id) => {
         const positionInfo = await contractActions.getPosition(id);
+        console.log('???!',positionInfo)
         if (positionInfo) {
           const entryTime = openTimes[id] || new Date().toLocaleString();
           
@@ -182,6 +188,20 @@ export const PositionPanel: React.FC = () => {
     }
   }, [isRegistered, address]);
 
+  // 监听refreshTrigger，如果触发则刷新持仓
+  useEffect(() => {
+    if (refreshTrigger) {
+      loadUserPositions();
+    }
+  }, [refreshTrigger]);
+
+  // 监听registrationRefreshTrigger，如果触发则重新检查注册状态
+  useEffect(() => {
+    if (registrationRefreshTrigger) {
+      checkRegistrationStatus();
+    }
+  }, [registrationRefreshTrigger]);
+
   const getPositionTypeColor = (isLong: boolean) => {
     return isLong ? 'success' : 'danger';
   };
@@ -239,9 +259,117 @@ export const PositionPanel: React.FC = () => {
     }
   };
 
-  // 如果用户未注册，不显示持仓面板
-  if (!isConnected || !isRegistered) {
-    return null;
+  // 如果用户未连接钱包，显示连接钱包引导
+  if (!isConnected) {
+    return (
+      <Card className="w-full">
+        <CardHeader className="flex gap-3">
+          <div className="flex flex-col">
+            <p className="text-md font-semibold">持仓管理</p>
+            <p className="text-small text-default-500">查看和管理当前持仓</p>
+          </div>
+        </CardHeader>
+        <Divider/>
+        <CardBody className="py-8">
+          <div className="flex flex-col items-center justify-center space-y-4 text-center">
+            <div className="w-16 h-16 bg-warning-100 text-warning-600 rounded-full flex items-center justify-center text-2xl">
+              🔗
+            </div>
+            <div className="space-y-2">
+              <h3 className="text-lg font-semibold text-default-700">请先连接钱包</h3>
+              <p className="text-default-500 max-w-sm">
+                需要连接您的钱包才能查看和管理持仓。请点击右上角的连接钱包按钮。
+              </p>
+            </div>
+          </div>
+        </CardBody>
+      </Card>
+    );
+  }
+
+  // 如果用户未注册，显示注册引导
+  if (!isRegistered) {
+    return (
+      <Card className="w-full">
+        <CardHeader className="flex gap-3">
+          <div className="flex flex-col">
+            <p className="text-md font-semibold">持仓管理</p>
+            <p className="text-small text-default-500">查看和管理当前持仓</p>
+          </div>
+        </CardHeader>
+        <Divider/>
+        <CardBody className="py-8">
+          <div className="flex flex-col items-center justify-center space-y-6 text-center">
+            <div className="w-16 h-16 bg-primary-100 text-primary-600 rounded-full flex items-center justify-center text-2xl">
+              📋
+            </div>
+            <div className="space-y-3">
+              <h3 className="text-lg font-semibold text-default-700">需要先完成注册</h3>
+              <p className="text-default-500 max-w-md">
+                您需要先注册才能开始交易和查看持仓。注册后您将获得初始的虚拟资产用于交易。
+              </p>
+            </div>
+            
+            {/* 功能说明 */}
+            <div className="w-full max-w-md space-y-4 pt-4">
+              <h4 className="text-sm font-semibold text-default-600 text-left">注册后您可以：</h4>
+              <div className="space-y-3 text-left">
+                <div className="flex items-start gap-3">
+                  <div className="w-5 h-5 bg-success-100 text-success-600 rounded-full flex items-center justify-center text-xs font-semibold mt-0.5">
+                    ✓
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm text-default-600">开仓和平仓 BTC 交易</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start gap-3">
+                  <div className="w-5 h-5 bg-success-100 text-success-600 rounded-full flex items-center justify-center text-xs font-semibold mt-0.5">
+                    ✓
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm text-default-600">查看和管理所有持仓信息</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start gap-3">
+                  <div className="w-5 h-5 bg-success-100 text-success-600 rounded-full flex items-center justify-center text-xs font-semibold mt-0.5">
+                    ✓
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm text-default-600">使用 FHE 技术保护交易隐私</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-start gap-3">
+                  <div className="w-5 h-5 bg-success-100 text-success-600 rounded-full flex items-center justify-center text-xs font-semibold mt-0.5">
+                    ✓
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm text-default-600">获得初始虚拟资产开始交易竞赛!</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 注册提示 */}
+            <div className="w-full max-w-md bg-primary-50 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <div className="w-6 h-6 bg-primary-100 text-primary-700 rounded-full flex items-center justify-center text-xs font-semibold">
+                  💡
+                </div>
+                <div className="flex-1">
+                  <h4 className="text-sm font-semibold text-primary-700 mb-1">如何注册？</h4>
+                  <p className="text-xs text-primary-600">
+                    请前往上方的用户信息面板，点击"立即注册"按钮在区块链上完成注册。
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </CardBody>
+      </Card>
+    );
   }
 
   return (
