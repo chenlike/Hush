@@ -1,3 +1,44 @@
 @import "tailwindcss";
 
 @config "../../tailwind.config.js"
+
+/* Toast 动画 */
+@keyframes slideInFromTop {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOutToTop {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+}
+
+.animate-in {
+  animation: slideInFromTop 0.3s ease-out;
+}
+
+.animate-out {
+  animation: slideOutToTop 0.3s ease-in;
+}
+
+/* 进度条动画 */
+.progress-bar {
+  transition: width 0.3s ease-in-out;
+}
+
+/* Toast container 样式 */
+.toast-container {
+  backdrop-filter: blur(8px);
+}
