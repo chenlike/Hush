@@ -14,13 +14,13 @@ export const WalletConnectGuide: React.FC = () => {
     <Card className="w-full">
       <CardHeader className="flex gap-3">
         <div className="flex flex-col">
-          <p className="text-md font-semibold">欢迎来到 Hush</p>
-          <p className="text-small text-default-500">连接钱包开始您的隐私交易之旅</p>
+          <p className="text-md font-semibold">Welcome to Hush</p>
+          <p className="text-small text-default-500">Connect your wallet to start your private trading journey</p>
         </div>
       </CardHeader>
       <Divider/>
       <CardBody className="space-y-6">
-        {/* 连接钱包区域 */}
+        {/* Wallet connection area */}
         <div className="text-center space-y-4">
           <div className="w-16 h-16 mx-auto bg-gradient-to-br from-primary-500 to-secondary-500 rounded-full flex items-center justify-center">
             <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
@@ -28,9 +28,9 @@ export const WalletConnectGuide: React.FC = () => {
             </svg>
           </div>
           <div>
-            <h3 className="text-lg font-semibold mb-2">连接您的钱包</h3>
+            <h3 className="text-lg font-semibold mb-2">Connect Your Wallet</h3>
             <p className="text-sm text-default-500 mb-4">
-              连接 Web3 钱包以访问交易功能
+              Connect your Web3 wallet to access trading features
             </p>
             <div className="flex justify-center">
               <ConnectButton />
@@ -40,9 +40,9 @@ export const WalletConnectGuide: React.FC = () => {
 
         <Divider />
 
-        {/* 功能特色 */}
+        {/* Features */}
         <div className="space-y-4">
-          <h4 className="text-sm font-semibold text-default-600">为什么选择 Hush？</h4>
+          <h4 className="text-sm font-semibold text-default-600">Why Choose Hush?</h4>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="text-center p-4 bg-primary-50 rounded-lg">
               <div className="w-8 h-8 mx-auto mb-2 bg-primary-100 rounded-full flex items-center justify-center">
@@ -50,9 +50,9 @@ export const WalletConnectGuide: React.FC = () => {
                   <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/>
                 </svg>
               </div>
-              <h5 className="text-sm font-semibold text-primary-700 mb-1">安全交易</h5>
+              <h5 className="text-sm font-semibold text-primary-700 mb-1">Secure Trading</h5>
               <p className="text-xs text-primary-600">
-                所有交易数据通过 FHE 同态加密技术保护，确保隐私安全
+                All trading data is protected by FHE (Fully Homomorphic Encryption) technology, ensuring privacy and security
               </p>
             </div>
             
@@ -62,9 +62,9 @@ export const WalletConnectGuide: React.FC = () => {
                   <path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/>
                 </svg>
               </div>
-              <h5 className="text-sm font-semibold text-secondary-700 mb-1">实时结算</h5>
+              <h5 className="text-sm font-semibold text-secondary-700 mb-1">Real-time Settlement</h5>
               <p className="text-xs text-secondary-600">
-                基于区块链的即时交易确认和资金结算
+                Instant transaction confirmation and fund settlement based on blockchain
               </p>
             </div>
             
@@ -74,9 +74,9 @@ export const WalletConnectGuide: React.FC = () => {
                   <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
                 </svg>
               </div>
-              <h5 className="text-sm font-semibold text-success-700 mb-1">公平竞技</h5>
+              <h5 className="text-sm font-semibold text-success-700 mb-1">Fair Competition</h5>
               <p className="text-xs text-success-600">
-                透明的排行榜系统，展示交易高手的真实实力
+                Transparent leaderboard system showing the real strength of trading experts
               </p>
             </div>
           </div>
@@ -84,17 +84,17 @@ export const WalletConnectGuide: React.FC = () => {
 
         <Divider />
 
-        {/* 使用步骤 */}
+        {/* Usage steps */}
         <div className="space-y-4">
-          <h4 className="text-sm font-semibold text-default-600">使用步骤</h4>
+          <h4 className="text-sm font-semibold text-default-600">How to Use</h4>
           <div className="space-y-3">
             <div className="flex items-center gap-3">
               <div className="w-6 h-6 bg-primary-100 text-primary-700 rounded-full flex items-center justify-center text-xs font-semibold">
                 1
               </div>
               <div className="flex-1">
-                <p className="text-sm font-medium">连接钱包</p>
-                <p className="text-xs text-default-500">使用 MetaMask 或其他 Web3 钱包</p>
+                <p className="text-sm font-medium">Connect Wallet</p>
+                <p className="text-xs text-default-500">Use MetaMask or other Web3 wallets</p>
               </div>
             </div>
             
@@ -103,8 +103,8 @@ export const WalletConnectGuide: React.FC = () => {
                 2
               </div>
               <div className="flex-1">
-                <p className="text-sm font-medium">注册账号</p>
-                <p className="text-xs text-default-500">在智能合约中注册您的交易账号</p>
+                <p className="text-sm font-medium">Register Account</p>
+                <p className="text-xs text-default-500">Register your trading account in the smart contract</p>
               </div>
             </div>
             
@@ -113,8 +113,8 @@ export const WalletConnectGuide: React.FC = () => {
                 3
               </div>
               <div className="flex-1">
-                <p className="text-sm font-medium">开始交易</p>
-                <p className="text-xs text-default-500">享受安全、私密的 BTC 合约交易</p>
+                <p className="text-sm font-medium">Start Trading</p>
+                <p className="text-xs text-default-500">Enjoy secure and private BTC contract trading</p>
               </div>
             </div>
           </div>

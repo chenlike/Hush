@@ -1,4 +1,4 @@
-/* Toast 容器样式 - 确保在所有情况下都固定在顶部 */
+/* Toast container styles - ensure fixed at the top in all cases */
 .toast-container {
   position: fixed !important;
   top: 1rem !important;
@@ -15,13 +15,13 @@
   pointer-events: auto !important;
 }
 
-/* 确保 toast 不会被其他元素遮挡 */
+/* Ensure toast is not covered by other elements */
 .toast-item {
   position: relative !important;
   z-index: 99999 !important;
 }
 
-/* 防止页面滚动时 toast 移动 */
+/* Prevent toast from moving when page scrolls */
 .toast-container.fixed-toast {
   position: fixed !important;
   top: 1rem !important;

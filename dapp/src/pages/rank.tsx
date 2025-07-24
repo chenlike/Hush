@@ -7,15 +7,15 @@ export default function RankPage() {
   return (
     <DefaultLayout>
       <section className="flex flex-col items-center justify-center gap-6 py-6 md:py-8">
-        {/* 页面标题 */}
+        {/* Page title */}
         <div className="inline-block max-w-4xl text-center justify-center">
-          <h1 className={title()}>🏆 交易排行榜</h1>
+          <h1 className={title()}>🏆 Trading Leaderboard</h1>
           <p className="text-default-500 mt-4">
-            基于公开余额的实时交易排名，展示交易高手的真实实力
+            Real-time trading ranking based on public balances, showcasing the true strength of trading experts
           </p>
         </div>
 
-        {/* 排行榜内容 */}
+        {/* Leaderboard content */}
         <div className="w-full max-w-6xl px-4">
           <RankingBoard />
         </div>

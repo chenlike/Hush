@@ -36,10 +36,11 @@ export const PositionPanel: React.FC<PositionPanelProps> = ({ refreshTrigger, re
   const [isDecrypting, setIsDecrypting] = useState(false);
   const [isLoadingPositions, setIsLoadingPositions] = useState(false);
   const [isRegistered, setIsRegistered] = useState(false);
+  const [positionToClose, setPositionToClose] = useState<{id: string, contractCount: string} | null>(null);
 
   const contractActions = useTradingContractActions();
 
-  // 检查用户注册状态
+  // Check user registration status
   const checkRegistrationStatus = async () => {
     if (!address) return;
     
@@ -47,17 +48,17 @@ export const PositionPanel: React.FC<PositionPanelProps> = ({ refreshTrigger, re
       const registered = await contractActions.checkUserRegistration(address);
       setIsRegistered(registered);
     } catch (error) {
-      console.error('检查注册状态失败:', error);
+      console.error('Failed to check registration status:', error);
     }
   };
 
-  // 加载用户持仓
+  // Load user positions
   const loadUserPositions = async () => {
     if (!address || !isRegistered) return;
     
     setIsLoadingPositions(true);
     try {
-      // 获取用户持仓ID列表
+      // Get user position ID list
       const positionIds = await contractActions.getUserPositionIds(address);
       
       if (positionIds.length === 0) {
@@ -66,25 +67,24 @@ export const PositionPanel: React.FC<PositionPanelProps> = ({ refreshTrigger, re
       }
 
 
-      // 批量获取开仓时间
-      const openTimes = await contractActions.getMultiplePositionOpenTimes(positionIds, address);
-
-      // 获取每个持仓的详情
+      // Get details for each position
       const positionPromises = positionIds.map(async (id) => {
         const positionInfo = await contractActions.getPosition(id);
         console.log('???!',positionInfo)
         if (positionInfo) {
-          const entryTime = openTimes[id] || new Date().toLocaleString();
+          // Directly use the timestamp returned by the contract, convert to local time string
+          const openTimestamp = positionInfo[5]; // openTimestamp is the 6th return value
+          const entryTime = new Date(Number(openTimestamp) * 1000).toLocaleString('en-US');
           
           return {
             id,
             owner: positionInfo[0],
-            contractCount: 'N/A', // 需要解密
-            btcSize: 'N/A', // 需要解密
-            entryPrice: String(positionInfo[3]), // 入场价格是明文的
-            isLong: false, // 需要解密
+            contractCount: 'N/A', // Needs decryption
+            btcSize: 'N/A', // Needs decryption
+            entryPrice: String(positionInfo[3]), // Entry price is in plain text
+            isLong: false, // Needs decryption
             isDecrypted: false,
-            entryTime, // 使用从事件日志获取的真实时间
+            entryTime, // Use timestamp returned by contract
           };
         }
         return null;
@@ -92,7 +92,7 @@ export const PositionPanel: React.FC<PositionPanelProps> = ({ refreshTrigger, re
 
       const loadedPositions = await Promise.all(positionPromises);
       const validPositions = loadedPositions.filter(p => p !== null) as PositionData[];
-      // 排序按照时间倒序
+      // Sort by time in descending order
       validPositions.sort((a, b) => {
         const dateA = new Date(a.entryTime);
         const dateB = new Date(b.entryTime);
@@ -100,28 +100,28 @@ export const PositionPanel: React.FC<PositionPanelProps> = ({ refreshTrigger, re
       });
       setPositions(validPositions);
     } catch (error) {
-      console.error('加载持仓失败:', error);
+      console.error('Failed to load positions:', error);
     } finally {
       setIsLoadingPositions(false);
     }
   };
 
-  // 解密持仓信息
+  // Decrypt position information
   const decryptPosition = async (positionId: string) => {
     setIsDecrypting(true);
     setSelectedPosition(positionId);
     
     try {
-      // 获取持仓的加密数据
+      // Get encrypted data for the position
       const positionInfo = await contractActions.getPosition(positionId);
       if (!positionInfo) {
-        throw new Error('无法获取持仓信息');
+        throw new Error('Unable to get position information');
       }
 
-      // 解密持仓信息
+      // Decrypt position information
       const decryptedInfo = await contractActions.decryptPosition(positionInfo);
       
-      // 更新持仓状态
+      // Update position state
       setPositions(prev => prev.map(pos => 
         pos.id === positionId 
           ? { 
@@ -134,14 +134,14 @@ export const PositionPanel: React.FC<PositionPanelProps> = ({ refreshTrigger, re
       ));
       
     } catch (error: any) {
-      console.error('解密失败:', error);
+      console.error('Decryption failed:', error);
       
-      // 更新错误状态
+      // Update error state
       setPositions(prev => prev.map(pos => 
         pos.id === positionId 
           ? { 
               ...pos, 
-              error: error.message || '解密失败',
+              error: error.message || 'Decryption failed',
               isDecrypted: false
             }
           : pos
@@ -152,24 +152,26 @@ export const PositionPanel: React.FC<PositionPanelProps> = ({ refreshTrigger, re
     }
   };
 
-  // 平仓操作
+  // Close position operation
   const closePositionCall = useContractCall(
-    () => contractActions.closePosition(selectedPosition, '1000'), // 这里的平仓金额可以让用户选择
+    () => positionToClose ? contractActions.closePosition(positionToClose.id, positionToClose.contractCount) : Promise.reject('No position selected'),
     {
-      title: '执行平仓',
+      title: 'Execute Close Position',
       onSuccess: (receipt) => {
-        // 刷新持仓列表
+        // Refresh position list
         setTimeout(() => {
           loadUserPositions();
         }, 2000);
+        setPositionToClose(null);
       },
       onError: (error) => {
-        console.error('平仓失败:', error);
+        console.error('Failed to close position:', error);
+        setPositionToClose(null);
       }
     }
   );
 
-  // 检查注册状态和加载持仓
+  // Check registration status and load positions
   useEffect(() => {
     if (isConnected && address) {
       checkRegistrationStatus();
@@ -179,7 +181,7 @@ export const PositionPanel: React.FC<PositionPanelProps> = ({ refreshTrigger, re
     }
   }, [isConnected, address]);
 
-  // 当注册状态确认后，加载持仓
+  // After registration status is confirmed, load positions
   useEffect(() => {
     if (isRegistered && address) {
       loadUserPositions();
@@ -188,14 +190,14 @@ export const PositionPanel: React.FC<PositionPanelProps> = ({ refreshTrigger, re
     }
   }, [isRegistered, address]);
 
-  // 监听refreshTrigger，如果触发则刷新持仓
+  // Listen to refreshTrigger, refresh positions if triggered
   useEffect(() => {
     if (refreshTrigger) {
       loadUserPositions();
     }
   }, [refreshTrigger]);
 
-  // 监听registrationRefreshTrigger，如果触发则重新检查注册状态
+  // Listen to registrationRefreshTrigger, recheck registration status if triggered
   useEffect(() => {
     if (registrationRefreshTrigger) {
       checkRegistrationStatus();
@@ -207,18 +209,18 @@ export const PositionPanel: React.FC<PositionPanelProps> = ({ refreshTrigger, re
   };
 
   const getPositionTypeText = (isLong: boolean) => {
-    return isLong ? '多仓' : '空仓';
+    return isLong ? 'Long' : 'Short';
   };
 
-  // 格式化时间显示
+  // Format time display
   const formatTime = (timeString: string) => {
     try {
       
       const date = new Date(timeString);
       
-      // 检查是否为有效日期
+      // Check if it's a valid date
       if (isNaN(date.getTime())) {
-        return timeString; // 如果不是有效日期，返回原字符串
+        return timeString; // If not a valid date, return original string
       }
       
       const now = new Date();
@@ -226,9 +228,9 @@ export const PositionPanel: React.FC<PositionPanelProps> = ({ refreshTrigger, re
       const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
       
       
-      // 如果时间差为负数（未来时间），显示具体时间
+      // If time difference is negative (future time), show specific time
       if (diffInMinutes < 0) {
-        return date.toLocaleString('zh-CN', {
+        return date.toLocaleString('en-US', {
           month: '2-digit',
           day: '2-digit',
           hour: '2-digit',
@@ -236,17 +238,17 @@ export const PositionPanel: React.FC<PositionPanelProps> = ({ refreshTrigger, re
         });
       }
       
-      // 如果是今天的数据，显示相对时间
+      // If it's today's data, show relative time
       if (diffInMinutes < 1) {
-        return '刚刚';
+        return 'Just now';
       } else if (diffInMinutes < 60) {
-        return `${diffInMinutes}分钟前`;
+        return `${diffInMinutes} minutes ago`;
       } else if (diffInMinutes < 24 * 60) {
         const hours = Math.floor(diffInMinutes / 60);
-        return `${hours}小时前`;
+        return `${hours} hours ago`;
       } else {
-        // 超过一天的显示具体日期和时间
-        return date.toLocaleString('zh-CN', {
+        // Show specific date and time for more than a day
+        return date.toLocaleString('en-US', {
           month: '2-digit',
           day: '2-digit',
           hour: '2-digit',
@@ -254,19 +256,19 @@ export const PositionPanel: React.FC<PositionPanelProps> = ({ refreshTrigger, re
         });
       }
     } catch (error) {
-      console.error('时间格式化错误:', error);
+      console.error('Time formatting error:', error);
       return timeString;
     }
   };
 
-  // 如果用户未连接钱包，显示连接钱包引导
+  // If user hasn't connected wallet, show wallet connection guide
   if (!isConnected) {
     return (
       <Card className="w-full">
         <CardHeader className="flex gap-3">
           <div className="flex flex-col">
-            <p className="text-md font-semibold">持仓管理</p>
-            <p className="text-small text-default-500">查看和管理当前持仓</p>
+            <p className="text-md font-semibold">Position Management</p>
+            <p className="text-small text-default-500">View and manage current positions</p>
           </div>
         </CardHeader>
         <Divider/>
@@ -276,9 +278,9 @@ export const PositionPanel: React.FC<PositionPanelProps> = ({ refreshTrigger, re
               🔗
             </div>
             <div className="space-y-2">
-              <h3 className="text-lg font-semibold text-default-700">请先连接钱包</h3>
+              <h3 className="text-lg font-semibold text-default-700">Please connect your wallet first</h3>
               <p className="text-default-500 max-w-sm">
-                需要连接您的钱包才能查看和管理持仓。请点击右上角的连接钱包按钮。
+                You need to connect your wallet to view and manage positions. Please click the connect wallet button in the top right corner.
               </p>
             </div>
           </div>
@@ -287,14 +289,14 @@ export const PositionPanel: React.FC<PositionPanelProps> = ({ refreshTrigger, re
     );
   }
 
-  // 如果用户未注册，显示注册引导
+  // If user is not registered, show registration guide
   if (!isRegistered) {
     return (
       <Card className="w-full">
         <CardHeader className="flex gap-3">
           <div className="flex flex-col">
-            <p className="text-md font-semibold">持仓管理</p>
-            <p className="text-small text-default-500">查看和管理当前持仓</p>
+            <p className="text-md font-semibold">Position Management</p>
+            <p className="text-small text-default-500">View and manage current positions</p>
           </div>
         </CardHeader>
         <Divider/>
@@ -304,22 +306,22 @@ export const PositionPanel: React.FC<PositionPanelProps> = ({ refreshTrigger, re
               📋
             </div>
             <div className="space-y-3">
-              <h3 className="text-lg font-semibold text-default-700">需要先完成注册</h3>
+              <h3 className="text-lg font-semibold text-default-700">Registration required first</h3>
               <p className="text-default-500 max-w-md">
-                您需要先注册才能开始交易和查看持仓。注册后您将获得初始的虚拟资产用于交易。
+                You need to register first to start trading and view positions. After registration, you will receive initial virtual assets for trading.
               </p>
             </div>
             
-            {/* 功能说明 */}
+            {/* Feature description */}
             <div className="w-full max-w-md space-y-4 pt-4">
-              <h4 className="text-sm font-semibold text-default-600 text-left">注册后您可以：</h4>
+              <h4 className="text-sm font-semibold text-default-600 text-left">After registration, you can:</h4>
               <div className="space-y-3 text-left">
                 <div className="flex items-start gap-3">
                   <div className="w-5 h-5 bg-success-100 text-success-600 rounded-full flex items-center justify-center text-xs font-semibold mt-0.5">
                     ✓
                   </div>
                   <div className="flex-1">
-                    <p className="text-sm text-default-600">开仓和平仓 BTC 交易</p>
+                    <p className="text-sm text-default-600">Open and close BTC trading positions</p>
                   </div>
                 </div>
                 
@@ -328,7 +330,7 @@ export const PositionPanel: React.FC<PositionPanelProps> = ({ refreshTrigger, re
                     ✓
                   </div>
                   <div className="flex-1">
-                    <p className="text-sm text-default-600">查看和管理所有持仓信息</p>
+                    <p className="text-sm text-default-600">View and manage all position information</p>
                   </div>
                 </div>
                 
@@ -337,7 +339,7 @@ export const PositionPanel: React.FC<PositionPanelProps> = ({ refreshTrigger, re
                     ✓
                   </div>
                   <div className="flex-1">
-                    <p className="text-sm text-default-600">使用 FHE 技术保护交易隐私</p>
+                    <p className="text-sm text-default-600">Use FHE technology to protect trading privacy</p>
                   </div>
                 </div>
                 
@@ -346,22 +348,22 @@ export const PositionPanel: React.FC<PositionPanelProps> = ({ refreshTrigger, re
                     ✓
                   </div>
                   <div className="flex-1">
-                    <p className="text-sm text-default-600">获得初始虚拟资产开始交易竞赛!</p>
+                    <p className="text-sm text-default-600">Get initial virtual assets to start trading competition!</p>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* 注册提示 */}
+            {/* Registration tip */}
             <div className="w-full max-w-md bg-primary-50 rounded-lg p-4">
               <div className="flex items-start gap-3">
                 <div className="w-6 h-6 bg-primary-100 text-primary-700 rounded-full flex items-center justify-center text-xs font-semibold">
                   💡
                 </div>
                 <div className="flex-1">
-                  <h4 className="text-sm font-semibold text-primary-700 mb-1">如何注册？</h4>
+                  <h4 className="text-sm font-semibold text-primary-700 mb-1">How to register?</h4>
                   <p className="text-xs text-primary-600">
-                    请前往上方的用户信息面板，点击"立即注册"按钮在区块链上完成注册。
+                    Please go to the user information panel above and click the "Register Now" button to complete registration on the blockchain.
                   </p>
                 </div>
               </div>
@@ -376,8 +378,8 @@ export const PositionPanel: React.FC<PositionPanelProps> = ({ refreshTrigger, re
     <Card className="w-full">
       <CardHeader className="flex gap-3">
         <div className="flex flex-col">
-          <p className="text-md font-semibold">持仓管理</p>
-          <p className="text-small text-default-500">查看和管理当前持仓</p>
+          <p className="text-md font-semibold">Position Management</p>
+          <p className="text-small text-default-500">View and manage current positions</p>
         </div>
         <div className="ml-auto">
           <Button
@@ -387,7 +389,7 @@ export const PositionPanel: React.FC<PositionPanelProps> = ({ refreshTrigger, re
             onPress={loadUserPositions}
             isLoading={isLoadingPositions}
           >
-            {isLoadingPositions ? '加载中...' : '刷新'}
+            {isLoadingPositions ? 'Loading...' : 'Refresh'}
           </Button>
         </div>
       </CardHeader>
@@ -396,29 +398,29 @@ export const PositionPanel: React.FC<PositionPanelProps> = ({ refreshTrigger, re
         {isLoadingPositions ? (
           <div className="flex flex-col items-center justify-center py-8">
             <Spinner size="lg" />
-            <p className="text-sm text-default-500 mt-4">正在加载持仓数据...</p>
+            <p className="text-sm text-default-500 mt-4">Loading position data...</p>
           </div>
         ) : positions.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-default-400">
-            <p className="text-lg mb-2">暂无持仓</p>
-            <p className="text-sm">开始交易后持仓将显示在这里</p>
+            <p className="text-lg mb-2">No positions</p>
+            <p className="text-sm">Positions will be displayed here after you start trading</p>
           </div>
         ) : (
           <div className="space-y-4">
             <Table 
-              aria-label="持仓列表"
+              aria-label="Position list"
               classNames={{
                 wrapper: "min-h-[200px]",
               }}
             >
               <TableHeader>
-                <TableColumn>持仓ID</TableColumn>
-                <TableColumn>方向</TableColumn>
-                <TableColumn>BTC数量</TableColumn>
-                <TableColumn>入场价格</TableColumn>
-                <TableColumn>入场时间</TableColumn>
-                <TableColumn>合约数量</TableColumn>
-                <TableColumn>操作</TableColumn>
+                <TableColumn>Position ID</TableColumn>
+                <TableColumn>Direction</TableColumn>
+                <TableColumn>BTC Amount</TableColumn>
+                <TableColumn>Entry Price</TableColumn>
+                <TableColumn>Entry Time</TableColumn>
+                <TableColumn>Contract Amount</TableColumn>
+                <TableColumn>Actions</TableColumn>
               </TableHeader>
               <TableBody>
                 {positions.map((position) => (
@@ -475,11 +477,11 @@ export const PositionPanel: React.FC<PositionPanelProps> = ({ refreshTrigger, re
                             isDisabled={isDecrypting || !!position.error}
                           >
                             {isDecrypting && selectedPosition === position.id ? (
-                              '解密中...'
+                              'Decrypting...'
                             ) : position.error ? (
-                              '解密失败'
+                              'Decrypt Failed'
                             ) : (
-                              '解密'
+                              'Decrypt'
                             )}
                           </Button>
                         ) : (
@@ -489,11 +491,17 @@ export const PositionPanel: React.FC<PositionPanelProps> = ({ refreshTrigger, re
                             color="warning"
                             onPress={() => {
                               setSelectedPosition(position.id);
+                              // Use decrypted contract amount, or default value if not available
+                              const contractCountToUse = position.contractCount || '1000';
+                              setPositionToClose({ 
+                                id: position.id, 
+                                contractCount: contractCountToUse 
+                              });
                               closePositionCall.execute();
                             }}
-                            isLoading={closePositionCall.isLoading && selectedPosition === position.id}
+                            isLoading={closePositionCall.isLoading && positionToClose?.id === position.id}
                           >
-                            平仓
+                            Close
                           </Button>
                         )}
                       </div>
@@ -503,33 +511,33 @@ export const PositionPanel: React.FC<PositionPanelProps> = ({ refreshTrigger, re
               </TableBody>
             </Table>
 
-            {/* 解密说明 */}
+            {/* Decryption information */}
             <div className="p-4 bg-primary-50 rounded-lg border border-primary-200">
               <div className="flex items-start gap-3">
                 <div className="w-6 h-6 bg-primary-100 text-primary-700 rounded-full flex items-center justify-center text-xs font-semibold">
                   ℹ
                 </div>
                 <div className="flex-1">
-                  <h4 className="text-sm font-semibold text-primary-700 mb-1">隐私保护说明</h4>
+                  <h4 className="text-sm font-semibold text-primary-700 mb-1">Privacy Protection Information</h4>
                   <p className="text-xs text-primary-600">
-                    持仓信息已通过 FHE 同态加密技术保护。在解密前，您只能看到入场价格和时间。
-                    点击"解密"按钮可以查看完整的持仓信息，包括方向和数量。
+                    Position information is protected by FHE (Fully Homomorphic Encryption) technology. Before decryption, you can only see the entry price and time.
+                    Click the "Decrypt" button to view complete position information, including direction and amount.
                   </p>
                 </div>
               </div>
             </div>
 
-            {/* 错误显示 */}
+            {/* Error display */}
             {positions.some(p => p.error) && (
               <>
                 <Divider />
                 <div className="space-y-2">
-                  <h4 className="text-sm font-semibold text-danger-600">解密错误</h4>
+                  <h4 className="text-sm font-semibold text-danger-600">Decryption Errors</h4>
                   {positions
                     .filter(p => p.error)
                     .map(position => (
                       <div key={position.id} className="text-sm text-danger-500">
-                        持仓 #{position.id}: {position.error}
+                        Position #{position.id}: {position.error}
                       </div>
                     ))
                   }

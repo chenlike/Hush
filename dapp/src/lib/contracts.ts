@@ -30,7 +30,7 @@ export interface BalanceRevealInfo {
   timestamp: string;
 }
 
-// 交易状态枚举
+// Transaction status enum
 export enum TransactionStatus {
   IDLE = 'idle',
   PREPARING = 'preparing',
@@ -40,7 +40,7 @@ export enum TransactionStatus {
   FAILED = 'failed',
 }
 
-// 交易状态接口
+// Transaction state interface
 export interface TransactionState {
   status: TransactionStatus;
   hash?: `0x${string}`;
@@ -48,18 +48,18 @@ export interface TransactionState {
   receipt?: any;
 }
 
-// 优雅的交易管理 hook
+// Elegant transaction management hook
 export const useTransactionManager = () => {
   const [txState, setTxState] = useState<TransactionState>({
     status: TransactionStatus.IDLE,
   });
 
-  // 监听交易状态
+  // Listen to transaction status
   const { data: receipt, isError, error } = useWaitForTransactionReceipt({
     hash: txState.hash,
   });
 
-  // 更新交易状态
+  // Update transaction status
   useEffect(() => {
     if (txState.hash && !txState.receipt) {
       setTxState(prev => ({ ...prev, status: TransactionStatus.CONFIRMING }));
@@ -70,30 +70,30 @@ export const useTransactionManager = () => {
         ...prev,
         status: receipt.status === 'success' ? TransactionStatus.SUCCESS : TransactionStatus.FAILED,
         receipt,
-        error: receipt.status === 'reverted' ? '交易被回滚' : undefined,
+        error: receipt.status === 'reverted' ? 'Transaction reverted' : undefined,
       }));
     } else if (isError && error) {
       setTxState(prev => ({
         ...prev,
         status: TransactionStatus.FAILED,
-        error: error.message || '交易确认失败',
+        error: error.message || 'Transaction confirmation failed',
       }));
     }
   }, [receipt, isError, error, txState.hash]);
 
-  // 立即设置准备状态的方法
+  // Method to immediately set preparing state
   const setPreparingState = useCallback(() => {
     setTxState({
       status: TransactionStatus.PREPARING,
     });
   }, []);
 
-  // 执行交易的通用方法
+  // Generic method to execute transactions
   const executeTransaction = useCallback(async (
     transactionFn: () => Promise<`0x${string}`>
   ) => {
     try {
-      // 如果还没有设置为 PREPARING 状态，则设置
+      // If not yet set to PREPARING state, set it
       setTxState(prev => 
         prev.status === TransactionStatus.IDLE 
           ? { status: TransactionStatus.PREPARING }
@@ -108,7 +108,7 @@ export const useTransactionManager = () => {
       });
 
     } catch (error: any) {
-      const errorMessage = error.message || '交易发起失败';
+      const errorMessage = error.message || 'Transaction initiation failed';
       setTxState({
         status: TransactionStatus.FAILED,
         error: errorMessage,
@@ -117,7 +117,7 @@ export const useTransactionManager = () => {
     }
   }, []);
 
-  // 监听交易状态变化并触发回调
+  // Listen to transaction status changes and trigger callbacks
   useEffect(() => {
     if (txState.status === TransactionStatus.SUCCESS && txState.receipt) {
       setTimeout(() => setTxState({ status: TransactionStatus.IDLE }), 2000);
@@ -152,7 +152,7 @@ export const useTradingContractActions = () => {
 
   const { writeContractAsync } = useWriteContract();
 
-  // 检查用户是否已注册
+  // Check if user is registered
   const checkUserRegistration = useCallback(async (userAddress?: string): Promise<boolean> => {
     const targetAddress = userAddress || address;
     if (!targetAddress || !publicClient) return false;
@@ -166,12 +166,12 @@ export const useTradingContractActions = () => {
       });
       return Boolean(isRegistered);
     } catch (error) {
-      console.error('检查注册状态失败:', error);
+      console.error('Failed to check registration status:', error);
       return false;
     }
   }, [address, publicClient]);
 
-  // 获取用户加密余额
+  // Get user encrypted balance
   const getUserBalance = useCallback(async (userAddress?: string): Promise<string | null> => {
     const targetAddress = userAddress || address;
     if (!targetAddress || !publicClient) return null;
@@ -185,12 +185,12 @@ export const useTradingContractActions = () => {
       });
       return String(encryptedBalance);
     } catch (error) {
-      console.error('获取加密余额失败:', error);
+      console.error('Failed to get encrypted balance:', error);
       return null;
     }
   }, [address, publicClient]);
 
-  // 获取最新余额揭示
+  // Get latest balance reveal
   const getLatestBalanceReveal = useCallback(async (userAddress?: string): Promise<BalanceRevealInfo | null> => {
     const targetAddress = userAddress || address;
     if (!targetAddress || !publicClient) return null;
@@ -214,12 +214,12 @@ export const useTradingContractActions = () => {
       }
       return null;
     } catch (error) {
-      console.error('获取余额揭示失败:', error);
+      console.error('Failed to get balance reveal:', error);
       return null;
     }
   }, [address, publicClient]);
 
-  // 获取用户持仓ID列表
+  // Get user position ID list
   const getUserPositionIds = useCallback(async (userAddress?: string): Promise<string[]> => {
     const targetAddress = userAddress || address;
     if (!targetAddress || !publicClient) return [];
@@ -237,12 +237,12 @@ export const useTradingContractActions = () => {
       }
       return [];
     } catch (error) {
-      console.error('获取用户持仓ID失败:', error);
+      console.error('Failed to get user position IDs:', error);
       return [];
     }
   }, [address, publicClient]);
 
-  // 获取持仓详情
+  // Get position details
   const getPosition = useCallback(async (positionId: string): Promise<any> => {
     if (!publicClient) return null;
 
@@ -256,7 +256,7 @@ export const useTradingContractActions = () => {
 
       return result;
     } catch (error) {
-      console.error('获取持仓详情失败:', error);
+      console.error('Failed to get position details:', error);
       return null;
     }
   }, [publicClient]);
@@ -518,7 +518,7 @@ export const useTradingContractActions = () => {
 
   // 基础合约调用方法
   const register = useCallback(async (): Promise<`0x${string}`> => {
-    if (!address) throw new Error('钱包未连接');
+    if (!address) throw new Error('Wallet not connected');
     
     return await writeContractAsync({
       address: CONTRACTS.TRADER.address,
@@ -530,7 +530,7 @@ export const useTradingContractActions = () => {
 
   const openPosition = useCallback(async (isLong: boolean, usdAmount: string): Promise<`0x${string}`> => {
     if (!address || !usdAmount || !fheService.isReady()) {
-      throw new Error('开仓前置条件不满足,请等待FHE加载完毕');
+      throw new Error('Open position requirements not met, please wait for FHE to finish loading');
     }
 
     const encryptedInput = fheService.createEncryptedInput(CONTRACTS.TRADER.address, address);
@@ -555,7 +555,7 @@ export const useTradingContractActions = () => {
 
   const closePosition = useCallback(async (positionId: string, closeUsdAmount: string): Promise<`0x${string}`> => {
     if (!address || !positionId || !closeUsdAmount || !fheService.isReady()) {
-      throw new Error('平仓前置条件不满足');
+      throw new Error('Close position requirements not met');
     }
 
     const encryptedInput = fheService.createEncryptedInput(CONTRACTS.TRADER.address, address);
@@ -577,7 +577,7 @@ export const useTradingContractActions = () => {
   }, [address, writeContractAsync]);
 
   const revealBalance = useCallback(async (): Promise<`0x${string}`> => {
-    if (!address) throw new Error('钱包未连接');
+    if (!address) throw new Error('Wallet not connected');
     
     return await writeContractAsync({
       address: CONTRACTS.TRADER.address,
@@ -587,7 +587,7 @@ export const useTradingContractActions = () => {
     });
   }, [address, writeContractAsync]);
 
-  // 获取当前BTC价格（从Trader合约）
+  // Get current BTC price (from Trader contract)
   const getCurrentBtcPrice = useCallback(async (): Promise<number | null> => {
     if (!publicClient) return null;
 
@@ -600,12 +600,12 @@ export const useTradingContractActions = () => {
       });
       return Number(price);
     } catch (error) {
-      console.error('获取BTC价格失败:', error);
+      console.error('Failed to get BTC price:', error);
       return null;
     }
   }, [publicClient]);
 
-  // 获取PriceOracle的BTC价格
+  // Get BTC price from PriceOracle
   const getOracleBtcPrice = useCallback(async (): Promise<number | null> => {
     if (!publicClient) return null;
 
@@ -618,7 +618,7 @@ export const useTradingContractActions = () => {
       });
       return Number(price);
     } catch (error) {
-      console.error('获取Oracle BTC价格失败:', error);
+      console.error('Failed to get Oracle BTC price:', error);
       return null;
     }
   }, [publicClient]);
@@ -754,7 +754,7 @@ export const useTradingContractActions = () => {
   }, [publicClient]);
 
   const decryptBalance = async (encryptedBalance: any): Promise<string> => {
-    if (!encryptedBalance || !address || !walletClient) throw new Error('解密余额前置条件不满足');
+    if (!encryptedBalance || !address || !walletClient) throw new Error('Decrypt balance requirements not met');
 
     try {
       const balanceHandle = String(encryptedBalance);
@@ -767,18 +767,18 @@ export const useTradingContractActions = () => {
       const balance = results[balanceHandle];
       return balance?.toString() || '0';
     } catch (error: any) {
-      console.error('解密余额失败:', error);
+      console.error('Failed to decrypt balance:', error);
       if (error.message.includes('user rejected')) {
-        throw new Error('用户取消了签名');
+        throw new Error('User cancelled signature');
       }
-      throw new Error(`解密失败: ${error.message}`);
+      throw new Error(`Decryption failed: ${error.message}`);
     }
   };
 
   const decryptPosition = async (
     positionInfo: any
   ): Promise<DecryptedPositionInfo> => {
-    if (!positionInfo || !address || !walletClient) throw new Error('解密持仓前置条件不满足');
+    if (!positionInfo || !address || !walletClient) throw new Error('Decrypt position requirements not met');
 
     const contractCountHandle = String(positionInfo[1]);
     const btcSizeHandle = String(positionInfo[2]);
@@ -812,8 +812,8 @@ export const useTradingContractActions = () => {
         entryPrice: 'N/A',
         isLong: false,
         error: error.message.includes('user rejected')
-          ? '用户取消了签名'
-          : `解密失败: ${error.message}`,
+          ? 'User cancelled signature'
+          : `Decryption failed: ${error.message}`,
       };
     }
   };

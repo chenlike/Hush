@@ -31,7 +31,7 @@ export const UserInfoPanel: React.FC<UserInfoPanelProps> = ({
 
   const contractActions = useTradingContractActions();
 
-  // 检查用户注册状态
+  // Check user registration status
   const checkRegistrationStatus = async () => {
     if (!address) return;
     
@@ -40,28 +40,28 @@ export const UserInfoPanel: React.FC<UserInfoPanelProps> = ({
       const registered = await contractActions.checkUserRegistration(address);
       setIsRegistered(registered);
     } catch (error) {
-      console.error('检查注册状态失败:', error);
+      console.error('Failed to check registration status:', error);
     } finally {
       setIsCheckingRegistration(false);
     }
   };
 
-  // 余额揭示合约调用
+  // Balance reveal contract call
   const revealBalanceCall = useContractCall(contractActions.revealBalance, {
-    title: '余额揭示',
+    title: 'Balance Reveal',
     onSuccess: () => {
-      console.log('余额揭示成功');
-      // 揭示成功后，等待一段时间再获取最新的揭示信息
+      console.log('Balance revealed successfully');
+      // After successful reveal, wait for a while before getting the latest reveal info
       setTimeout(() => {
         loadLatestBalanceReveal();
       }, 2000);
     },
     onError: (error) => {
-      console.error('余额揭示失败:', error);
+      console.error('Balance reveal failed:', error);
     }
   });
 
-  // 获取最新余额揭示信息
+  // Get latest balance reveal information
   const loadLatestBalanceReveal = async () => {
     if (!address) return;
     
@@ -70,48 +70,48 @@ export const UserInfoPanel: React.FC<UserInfoPanelProps> = ({
       const revealInfo = await contractActions.getLatestBalanceReveal(address);
       setLastRevealInfo(revealInfo);
     } catch (error) {
-      console.error('获取余额揭示信息失败:', error);
+      console.error('Failed to get balance reveal information:', error);
     } finally {
       setIsLoadingReveal(false);
     }
   };
 
-  // 解密用户余额
+  // Decrypt user balance
   const handleDecryptBalance = async () => {
     if (!address || !contractActions.walletClient) return;
     
     setIsDecryptingBalance(true);
     try {
-      // 获取加密余额
+      // Get encrypted balance
       const encryptedBalance = await contractActions.getUserBalance(address);
       if (!encryptedBalance) {
-        throw new Error('无法获取加密余额');
+        throw new Error('Unable to get encrypted balance');
       }
       
-      // 解密余额
+      // Decrypt balance
       const decryptedBalance = await contractActions.decryptBalance(encryptedBalance);
       setBalance(decryptedBalance);
       
-      console.log('余额解密成功:', decryptedBalance);
+      console.log('Balance decrypted successfully:', decryptedBalance);
     } catch (error: any) {
-      console.error('余额解密失败:', error);
-      // 处理特定错误
-      if (error.message.includes('用户取消了签名')) {
-        // 用户取消签名，不显示错误
+      console.error('Balance decryption failed:', error);
+      // Handle specific errors
+      if (error.message.includes('User cancelled signature')) {
+        // User cancelled signature, don't show error
         return;
       }
-      // 其他错误可以在这里处理
+      // Other errors can be handled here
     } finally {
       setIsDecryptingBalance(false);
     }
   };
 
-  // 刷新余额
+  // Refresh balance
   const handleRefreshBalance = async () => {
     await handleDecryptBalance();
   };
 
-  // 页面加载时检查注册状态和获取余额信息
+  // Check registration status and get balance info on page load
   useEffect(() => {
     if (isConnected && address) {
       checkRegistrationStatus();
@@ -120,14 +120,14 @@ export const UserInfoPanel: React.FC<UserInfoPanelProps> = ({
     }
   }, [isConnected, address]);
 
-  // 监听registrationRefreshTrigger，如果触发则重新检查注册状态
+  // Listen to registrationRefreshTrigger, recheck registration status if triggered
   useEffect(() => {
     if (registrationRefreshTrigger && isConnected && address) {
       checkRegistrationStatus();
     }
   }, [registrationRefreshTrigger, isConnected, address]);
 
-  // 当注册状态确认后，获取余额信息
+  // After registration status is confirmed, get balance information
   useEffect(() => {
     if (isRegistered && address) {
       loadLatestBalanceReveal();
@@ -136,18 +136,18 @@ export const UserInfoPanel: React.FC<UserInfoPanelProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* 用户注册状态 */}
+      {/* User registration status */}
       <UserRegistration 
         onRegistrationComplete={onRegistrationComplete} 
         registrationRefreshTrigger={registrationRefreshTrigger} 
       />
       
-      {/* 余额信息 - 只在已注册时显示 */}
+      {/* Balance information - only show when registered */}
       {isConnected && isRegistered && (
         <Card>
           <CardBody className="space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold">账户余额</h3>
+              <h3 className="text-lg font-semibold">Account Balance</h3>
               <div className="flex gap-2">
                 <Button
                   size="sm"
@@ -156,7 +156,7 @@ export const UserInfoPanel: React.FC<UserInfoPanelProps> = ({
                   onPress={revealBalanceCall.execute}
                   isLoading={revealBalanceCall.isLoading}
                 >
-                  {revealBalanceCall.isLoading ? '揭示中...' : '余额揭示'}
+                  {revealBalanceCall.isLoading ? 'Revealing...' : 'Balance Reveal'}
                 </Button>
                 <Button
                   size="sm"
@@ -165,32 +165,32 @@ export const UserInfoPanel: React.FC<UserInfoPanelProps> = ({
                   onPress={handleDecryptBalance}
                   isLoading={isDecryptingBalance}
                 >
-                  {isDecryptingBalance ? '解密中...' : '解密余额'}
+                  {isDecryptingBalance ? 'Decrypting...' : 'Decrypt Balance'}
                 </Button>
               </div>
             </div>
             
             <Divider />
             
-            {/* 当前余额显示 */}
+            {/* Current balance display */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-default-500">当前余额:</span>
+                <span className="text-sm text-default-500">Current Balance:</span>
                 <div className="flex items-center gap-2">
                   {balance ? (
                     <Chip color="success" variant="flat" size="sm">
                       {balance} USD
                     </Chip>
                   ) : (
-                    <span className="text-sm text-default-400">未解密</span>
+                    <span className="text-sm text-default-400">Not decrypted</span>
                   )}
                   {isDecryptingBalance && <Spinner size="sm" />}
                 </div>
               </div>
 
-              {/* 最新余额揭示信息 */}
+              {/* Latest balance reveal information */}
               <div className="flex items-center justify-between">
-                <span className="text-sm text-default-500">最新揭示:</span>
+                <span className="text-sm text-default-500">Latest Reveal:</span>
                 <div className="flex items-center gap-2">
                   {isLoadingReveal ? (
                     <Spinner size="sm" />
@@ -200,16 +200,16 @@ export const UserInfoPanel: React.FC<UserInfoPanelProps> = ({
                       <div className="text-xs text-default-400">{lastRevealInfo.timestamp}</div>
                     </div>
                   ) : (
-                    <span className="text-sm text-default-400">暂无揭示记录</span>
+                    <span className="text-sm text-default-400">No reveal records</span>
                   )}
                 </div>
               </div>
             </div>
 
-            {/* 操作说明 */}
+            {/* Operation instructions */}
             <div className="p-3 bg-default-50 rounded-lg">
               <p className="text-xs text-default-500">
-                💡 提示：余额揭示会将您的余额公开记录在区块链上，而解密余额只在本地查看。 揭示余额会有一定的延迟
+                💡 Tip: Balance reveal will publicly record your balance on the blockchain, while decrypt balance only views locally. Balance reveal has some delay
               </p>
             </div>
 

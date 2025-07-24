@@ -31,7 +31,7 @@ export const TradingPanel: React.FC<TradingPanelProps> = ({ onPositionUpdate, re
 
   const contractActions = useTradingContractActions();
 
-  // 检查用户注册状态
+  // Check user registration status
   const checkRegistrationStatus = async () => {
     if (!address) {
       setIsRegistered(false);
@@ -43,21 +43,21 @@ export const TradingPanel: React.FC<TradingPanelProps> = ({ onPositionUpdate, re
       const registered = await contractActions.checkUserRegistration(address);
       setIsRegistered(registered);
     } catch (error) {
-      console.error('检查注册状态失败:', error);
+      console.error('Failed to check registration status:', error);
       setIsRegistered(false);
     } finally {
       setIsCheckingRegistration(false);
     }
   };
 
-  // 获取BTC价格
+  // Get BTC price
   const fetchBtcPrice = async () => {
     setIsLoadingPrice(true);
     try {
-      // 首先尝试从Trader合约获取价格
+      // First try to get price from Trader contract
       let price = await contractActions.getCurrentBtcPrice();
       
-      // 如果Trader合约返回null，则从PriceOracle获取
+      // If Trader contract returns null, get from PriceOracle
       if (price === null) {
         price = await contractActions.getOracleBtcPrice();
       }
@@ -65,13 +65,13 @@ export const TradingPanel: React.FC<TradingPanelProps> = ({ onPositionUpdate, re
       setBtcPrice(price);
       setLastPriceUpdate(new Date());
     } catch (error) {
-      console.error('获取BTC价格失败:', error);
+      console.error('Failed to get BTC price:', error);
     } finally {
       setIsLoadingPrice(false);
     }
   };
 
-  // 监听钱包连接状态变化
+  // Listen to wallet connection status changes
   useEffect(() => {
     if (isConnected && address) {
       checkRegistrationStatus();
@@ -80,25 +80,25 @@ export const TradingPanel: React.FC<TradingPanelProps> = ({ onPositionUpdate, re
     }
   }, [isConnected, address]);
 
-  // 监听注册状态刷新触发器
+  // Listen to registration status refresh trigger
   useEffect(() => {
     if (registrationRefreshTrigger && isConnected && address) {
       checkRegistrationStatus();
     }
   }, [registrationRefreshTrigger, isConnected, address]);
 
-  // 初始化时获取价格，然后定期刷新
+  // Get price on initialization, then refresh periodically
   useEffect(() => {
     if (isConnected) {
       fetchBtcPrice();
       
-      // 每30秒刷新一次价格
+      // Refresh price every 30 seconds
       const interval = setInterval(fetchBtcPrice, 30000);
       return () => clearInterval(interval);
     }
   }, [isConnected]);
 
-  // 格式化价格显示
+  // Format price display
   const formatPrice = (price: number | null) => {
     if (price === null) return 'N/A';
     return new Intl.NumberFormat('en-US', {
@@ -109,71 +109,71 @@ export const TradingPanel: React.FC<TradingPanelProps> = ({ onPositionUpdate, re
     }).format(price);
   };
 
-  // 格式化最后更新时间
+  // Format last update time
   const formatLastUpdate = (date: Date | null) => {
     if (!date) return '';
     const now = new Date();
     const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
     
     if (diffInSeconds < 60) {
-      return '刚刚更新';
+      return 'Just updated';
     } else if (diffInSeconds < 3600) {
       const minutes = Math.floor(diffInSeconds / 60);
-      return `${minutes}分钟前更新`;
+      return `Updated ${minutes} minutes ago`;
     } else {
-      return date.toLocaleTimeString('zh-CN', { 
+      return date.toLocaleTimeString('en-US', { 
         hour: '2-digit', 
         minute: '2-digit' 
       });
     }
   };
 
-  // 开仓
+  // Open position
   const openPositionCall = useContractCall(
     () => contractActions.openPosition(isLong, amount),
     {
-      title: `${isLong ? '开多仓' : '开空仓'}`,
+      title: `${isLong ? 'Open Long' : 'Open Short'}`,
       onSuccess: (receipt) => {
-        console.log('开仓成功', receipt);
-        setAmount('1000'); // 重置表单
-        // 开仓成功后触发持仓刷新
+        console.log('Position opened successfully', receipt);
+        setAmount('1000'); // Reset form
+        // Trigger position refresh after successful opening
         onPositionUpdate?.();
       }
     }
   );
 
-  // 平仓
+  // Close position
   const closePositionCall = useContractCall(
     () => contractActions.closePosition(positionId, closeAmount),
     {
-      title: '平仓',
+      title: 'Close Position',
       onSuccess: (receipt) => {
-        console.log('平仓成功', receipt);
+        console.log('Position closed successfully', receipt);
         setPositionId('');
         setCloseAmount('');
-        // 平仓成功后也触发持仓刷新
+        // Also trigger position refresh after closing
         onPositionUpdate?.();
       }
     }
   );
 
-  // 余额揭示
+  // Balance reveal
   const revealBalanceCall = useContractCall(contractActions.revealBalance, {
-    title: '余额揭示',
+    title: 'Balance Reveal',
     onSuccess: () => {
-      console.log('余额揭示成功');
+      console.log('Balance revealed successfully');
     }
   });
 
-  // 判断是否可以进行交易操作（开仓和平仓）
+  // Determine if trading operations are allowed (open and close positions)
   const canTrade = isConnected && isRegistered && !isCheckingRegistration;
 
   return (
     <Card className="w-full">
       <CardHeader className="flex gap-3">
         <div className="flex flex-col flex-1">
-          <p className="text-md font-semibold">交易面板</p>
-          <p className="text-small text-default-500">执行合约交易操作</p>
+          <p className="text-md font-semibold">Trading Panel</p>
+          <p className="text-small text-default-500">Execute contract trading operations</p>
         </div>
         
         {/* BTC价格显示区域 */}
@@ -185,7 +185,7 @@ export const TradingPanel: React.FC<TradingPanelProps> = ({ onPositionUpdate, re
                 {isLoadingPrice ? (
                   <div className="flex items-center gap-1">
                     <div className="w-4 h-4 border-2 border-primary-200 border-t-primary-600 rounded-full animate-spin"></div>
-                    <span className="text-sm text-default-400">加载中...</span>
+                    <span className="text-sm text-default-400">Loading...</span>
                   </div>
                 ) : (
                   <span className="text-lg font-bold text-primary-600">
@@ -217,21 +217,21 @@ export const TradingPanel: React.FC<TradingPanelProps> = ({ onPositionUpdate, re
       </CardHeader>
       <Divider/>
       <CardBody className="space-y-4">
-        {/* 开仓区域 */}
+        {/* Open position area */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h4 className="text-sm font-semibold text-default-600">开仓交易</h4>
+            <h4 className="text-sm font-semibold text-default-600">Open Position</h4>
             <div className="flex items-center gap-2">
               <Chip 
                 color={isLong ? "success" : "danger"} 
                 variant="flat" 
                 size="sm"
               >
-                {isLong ? "做多" : "做空"}
+                {isLong ? "Long" : "Short"}
               </Chip>
               {!canTrade && (
                 <Chip color="warning" variant="flat" size="sm">
-                  {!isConnected ? "请连接钱包" : isCheckingRegistration ? "检查中..." : "请先注册"}
+                  {!isConnected ? "Connect Wallet" : isCheckingRegistration ? "Checking..." : "Register First"}
                 </Chip>
               )}
             </div>
@@ -239,7 +239,7 @@ export const TradingPanel: React.FC<TradingPanelProps> = ({ onPositionUpdate, re
           
           <div className="space-y-3">
             <div className="space-y-2">
-              <label className="text-xs font-medium text-default-600">交易方向</label>
+              <label className="text-xs font-medium text-default-600">Trading Direction</label>
               <div className="flex gap-2">
                 <Button
                   size="sm"
@@ -249,7 +249,7 @@ export const TradingPanel: React.FC<TradingPanelProps> = ({ onPositionUpdate, re
                   className="flex-1"
                   isDisabled={!canTrade}
                 >
-                  做多
+                  Long
                 </Button>
                 <Button
                   size="sm"
@@ -259,15 +259,15 @@ export const TradingPanel: React.FC<TradingPanelProps> = ({ onPositionUpdate, re
                   className="flex-1"
                   isDisabled={!canTrade}
                 >
-                  做空
+                  Short
                 </Button>
               </div>
             </div>
             
             <Input
               type="number"
-              label="交易金额 (USD)"
-              placeholder="请输入金额"
+              label="Trading Amount (USD)"
+              placeholder="Enter amount"
               value={amount}
               onValueChange={setAmount}
               size="sm"
@@ -288,8 +288,8 @@ export const TradingPanel: React.FC<TradingPanelProps> = ({ onPositionUpdate, re
               className="w-full"
             >
               {!canTrade 
-                ? (!isConnected ? "请连接钱包" : isCheckingRegistration ? "检查注册状态..." : "请先完成注册")
-                : (isLong ? `开多仓 ${amount} USD` : `开空仓 ${amount} USD`)
+                ? (!isConnected ? "Connect Wallet" : isCheckingRegistration ? "Checking Registration..." : "Please Register First")
+                : (isLong ? `Open Long ${amount} USD` : `Open Short ${amount} USD`)
               }
             </Button>
           </div>
@@ -297,13 +297,13 @@ export const TradingPanel: React.FC<TradingPanelProps> = ({ onPositionUpdate, re
 
         <Divider />
 
-        {/* 平仓区域 */}
+        {/* Close position area */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h4 className="text-sm font-semibold text-default-600">平仓交易</h4>
+            <h4 className="text-sm font-semibold text-default-600">Close Position</h4>
             {!canTrade && (
               <Chip color="warning" variant="flat" size="sm">
-                {!isConnected ? "请连接钱包" : isCheckingRegistration ? "检查中..." : "请先注册"}
+                {!isConnected ? "Connect Wallet" : isCheckingRegistration ? "Checking..." : "Register First"}
               </Chip>
             )}
           </div>
@@ -311,8 +311,8 @@ export const TradingPanel: React.FC<TradingPanelProps> = ({ onPositionUpdate, re
           <div className="space-y-3">
             <Input
               type="text"
-              label="持仓 ID"
-              placeholder="请输入持仓ID"
+              label="Position ID"
+              placeholder="Enter position ID"
               value={positionId}
               onValueChange={setPositionId}
               size="sm"
@@ -321,8 +321,8 @@ export const TradingPanel: React.FC<TradingPanelProps> = ({ onPositionUpdate, re
             
             <Input
               type="number"
-              label="平仓金额 (USD)"
-              placeholder="请输入平仓金额"
+              label="Close Amount (USD)"
+              placeholder="Enter close amount"
               value={closeAmount}
               onValueChange={setCloseAmount}
               size="sm"
@@ -343,28 +343,28 @@ export const TradingPanel: React.FC<TradingPanelProps> = ({ onPositionUpdate, re
               className="w-full"
             >
               {!canTrade 
-                ? (!isConnected ? "请连接钱包" : isCheckingRegistration ? "检查注册状态..." : "请先完成注册")
-                : `平仓 ${closeAmount} USD`
+                ? (!isConnected ? "Connect Wallet" : isCheckingRegistration ? "Checking Registration..." : "Please Register First")
+                : `Close ${closeAmount} USD`
               }
             </Button>
           </div>
         </div>
 
-        {/* 操作状态显示 */}
+        {/* Operation status display */}
         {(openPositionCall.hash || closePositionCall.hash || revealBalanceCall.hash) && (
           <>
             <Divider />
             <div className="space-y-2">
-              <h4 className="text-xs font-semibold text-default-600">交易状态</h4>
+              <h4 className="text-xs font-semibold text-default-600">Transaction Status</h4>
               <div className="space-y-1 text-xs text-default-500 font-mono bg-default-50 p-2 rounded">
                 {openPositionCall.hash && (
-                  <div>开仓: {openPositionCall.hash.slice(0, 10)}... ({openPositionCall.status})</div>
+                  <div>Open: {openPositionCall.hash.slice(0, 10)}... ({openPositionCall.status})</div>
                 )}
                 {closePositionCall.hash && (
-                  <div>平仓: {closePositionCall.hash.slice(0, 10)}... ({closePositionCall.status})</div>
+                  <div>Close: {closePositionCall.hash.slice(0, 10)}... ({closePositionCall.status})</div>
                 )}
                 {revealBalanceCall.hash && (
-                  <div>余额: {revealBalanceCall.hash.slice(0, 10)}... ({revealBalanceCall.status})</div>
+                  <div>Balance: {revealBalanceCall.hash.slice(0, 10)}... ({revealBalanceCall.status})</div>
                 )}
               </div>
             </div>

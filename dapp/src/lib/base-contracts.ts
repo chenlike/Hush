@@ -1,7 +1,7 @@
 // 合约配置
 export const CONTRACTS = {
     PRICE_ORACLE: {
-        address: '0xce618b058b7136864f92172581d98324b2fD9A10' as `0x${string}`,
+        address: '0x7fE9e41e405e52D5534E0959D3573F1015E0d979' as `0x${string}`,
         abi:[
           {
             "inputs": [
@@ -169,8 +169,8 @@ export const CONTRACTS = {
         ] as const
     },
     TRADER: {
-        address: '0x9CAca2B2586a1b64bDB2079EFA955F37C5BCEa49' as `0x${string}`,
-        abi: [
+        address: '0x84A068202b1F52Cc76869a8777d2569C1cc4F87b' as `0x${string}`,
+        abi:[
           {
             "inputs": [
               {
@@ -622,6 +622,11 @@ export const CONTRACTS = {
                 "internalType": "ebool",
                 "name": "isLong",
                 "type": "bytes32"
+              },
+              {
+                "internalType": "uint256",
+                "name": "openTimestamp",
+                "type": "uint256"
               }
             ],
             "stateMutability": "view",

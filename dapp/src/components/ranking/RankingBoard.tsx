@@ -38,7 +38,7 @@ export const RankingBoard: React.FC = () => {
 
   const contractActions = useTradingContractActions();
 
-  // 格式化时间显示
+  // Format time display
   const formatTime = (timestamp: number) => {
     const date = new Date(timestamp * 1000);
     const now = new Date();
@@ -46,19 +46,19 @@ export const RankingBoard: React.FC = () => {
     const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
     
     if (diffInMinutes < 1) {
-      return '刚刚';
+      return 'Just now';
     } else if (diffInMinutes < 60) {
-      return `${diffInMinutes}分钟前`;
+      return `${diffInMinutes} minutes ago`;
     } else if (diffInMinutes < 24 * 60) {
       const hours = Math.floor(diffInMinutes / 60);
-      return `${hours}小时前`;
+      return `${hours} hours ago`;
     } else {
       const days = Math.floor(diffInMinutes / (24 * 60));
-      return `${days}天前`;
+      return `${days} days ago`;
     }
   };
 
-  // 加载排行榜数据
+  // Load leaderboard data
   const loadRankingData = async () => {
     if (!isConnected) return;
     
@@ -67,7 +67,7 @@ export const RankingBoard: React.FC = () => {
       const balanceReveals = await contractActions.getAllBalanceReveals();
       
       if (balanceReveals && balanceReveals.length > 0) {
-        // 转换数据格式并添加排名
+        // Convert data format and add ranking
         const rankingUsers: RankingUser[] = balanceReveals.map((reveal, index) => ({
           rank: index + 1,
           address: reveal.user,
@@ -80,7 +80,7 @@ export const RankingBoard: React.FC = () => {
 
         setRankings(rankingUsers);
         
-        // 设置当前用户排名
+        // Set current user ranking
         const userRank = rankingUsers.find(user => user.isCurrentUser);
         setCurrentUserRank(userRank || null);
         
@@ -90,7 +90,7 @@ export const RankingBoard: React.FC = () => {
         setCurrentUserRank(null);
       }
     } catch (error) {
-      console.error('加载排行榜数据失败:', error);
+      console.error('Failed to load leaderboard data:', error);
     } finally {
       setIsLoading(false);
     }
@@ -122,11 +122,11 @@ export const RankingBoard: React.FC = () => {
   const getRankColor = (rank: number) => {
     switch (rank) {
       case 1:
-        return 'warning'; // 金色
+        return 'warning'; // Gold
       case 2:
-        return 'default'; // 银色
+        return 'default'; // Silver
       case 3:
-        return 'secondary'; // 铜色
+        return 'secondary'; // Bronze
       default:
         return 'primary';
     }
@@ -153,7 +153,7 @@ export const RankingBoard: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* 当前用户排名卡片 */}
+      {/* Current user ranking card */}
       {currentUserRank && (
         <Card className="border-2 border-primary-200 bg-primary-50">
           <CardHeader>
@@ -166,8 +166,8 @@ export const RankingBoard: React.FC = () => {
                 {getRankIcon(currentUserRank.rank)}
               </Chip>
               <div>
-                <h3 className="text-lg font-semibold text-primary-800">您的排名</h3>
-                <p className="text-sm text-primary-600">当前位置第 {currentUserRank.rank} 名</p>
+                <h3 className="text-lg font-semibold text-primary-800">Your Ranking</h3>
+                <p className="text-sm text-primary-600">Current position: #{currentUserRank.rank}</p>
               </div>
             </div>
           </CardHeader>
@@ -176,81 +176,81 @@ export const RankingBoard: React.FC = () => {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="text-center">
                 <p className="text-xl font-bold text-primary-700">{formatBalance(currentUserRank.balance)}</p>
-                <p className="text-xs text-primary-500">当前余额</p>
+                <p className="text-xs text-primary-500">Current Balance</p>
               </div>
               <div className="text-center">
                 <p className={`text-xl font-bold ${currentUserRank.profit >= 0 ? 'text-success-600' : 'text-danger-600'}`}>
                   {formatProfit(currentUserRank.profit)}
                 </p>
-                <p className="text-xs text-primary-500">总盈亏</p>
+                <p className="text-xs text-primary-500">Total P&L</p>
               </div>
               <div className="text-center">
                 <p className={`text-xl font-bold ${currentUserRank.profitPercentage >= 0 ? 'text-success-600' : 'text-danger-600'}`}>
                   {formatProfitPercentage(currentUserRank.profitPercentage)}
                 </p>
-                <p className="text-xs text-primary-500">收益率</p>
+                <p className="text-xs text-primary-500">Return Rate</p>
               </div>
               <div className="text-center">
                 <p className="text-xl font-bold text-primary-700">{currentUserRank.lastRevealTime}</p>
-                <p className="text-xs text-primary-500">最后更新</p>
+                <p className="text-xs text-primary-500">Last Update</p>
               </div>
             </div>
           </CardBody>
         </Card>
       )}
 
-      {/* 排行榜主体 */}
+      {/* Leaderboard main content */}
       <Card>
         <CardHeader className="flex gap-3">
           <div className="flex flex-col flex-1">
-            <p className="text-md font-semibold">🏆 交易排行榜</p>
-            <p className="text-small text-default-500">基于公开余额的实时排名</p>
+            <p className="text-md font-semibold">🏆 Trading Leaderboard</p>
+            <p className="text-small text-default-500">Real-time ranking based on public balances</p>
           </div>
           {lastUpdateTime && (
             <div className="text-right">
               <p className="text-xs text-default-400">
-                最后更新: {lastUpdateTime.toLocaleTimeString('zh-CN')}
+                Last update: {lastUpdateTime.toLocaleTimeString('en-US')}
               </p>
               <p className="text-xs text-default-400">
-                共 {rankings.length} 位用户
+                {rankings.length} users total
               </p>
             </div>
           )}
         </CardHeader>
         <Divider/>
         <CardBody>
-          {/* 空状态或加载状态 */}
+          {/* Empty state or loading state */}
           {isLoading ? (
             <div className="flex flex-col items-center justify-center py-12">
               <Spinner size="lg" />
-              <p className="text-sm text-default-500 mt-4">正在加载排行榜数据...</p>
+              <p className="text-sm text-default-500 mt-4">Loading leaderboard data...</p>
             </div>
           ) : rankings.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-default-400">
               <div className="text-6xl mb-4">📊</div>
-              <h3 className="text-lg font-semibold mb-2">暂无排行数据</h3>
+              <h3 className="text-lg font-semibold mb-2">No ranking data yet</h3>
               <p className="text-sm text-center max-w-md">
-                还没有用户公开余额。成为第一个公开余额的用户吧！
+                No users have revealed their balances yet. Be the first to reveal your balance!
               </p>
               <p className="text-xs text-center mt-2 text-default-400">
-                在用户信息面板中点击"余额揭示"来公开您的余额
+                Click "Balance Reveal" in the user info panel to reveal your balance
               </p>
             </div>
           ) : (
-            /* 排行榜表格 */
+            /* Leaderboard table */
             <Table 
-              aria-label="排行榜"
+              aria-label="Leaderboard"
               classNames={{
                 wrapper: "min-h-[400px]",
               }}
             >
               <TableHeader>
-                <TableColumn>排名</TableColumn>
-                <TableColumn>用户地址</TableColumn>
-                <TableColumn>当前余额</TableColumn>
-                <TableColumn>总盈亏</TableColumn>
-                <TableColumn>收益率</TableColumn>
-                <TableColumn>最后更新</TableColumn>
+                <TableColumn>Rank</TableColumn>
+                <TableColumn>User Address</TableColumn>
+                <TableColumn>Current Balance</TableColumn>
+                <TableColumn>Total P&L</TableColumn>
+                <TableColumn>Return Rate</TableColumn>
+                <TableColumn>Last Update</TableColumn>
               </TableHeader>
               <TableBody>
                 {rankings.map((user) => (
@@ -269,7 +269,7 @@ export const RankingBoard: React.FC = () => {
                         </Chip>
                         {user.isCurrentUser && (
                           <Chip color="primary" variant="solid" size="sm">
-                            您
+                            You
                           </Chip>
                         )}
                       </div>
@@ -313,14 +313,7 @@ export const RankingBoard: React.FC = () => {
                         }`}>
                           {formatProfitPercentage(user.profitPercentage)}
                         </span>
-                        {user.profitPercentage !== 0 && (
-                          <Progress 
-                            value={Math.min(Math.abs(user.profitPercentage), 100)} 
-                            color={user.profitPercentage >= 0 ? "success" : "danger"}
-                            size="sm"
-                            className="w-16"
-                          />
-                        )}
+
                       </div>
                     </TableCell>
                     <TableCell>
@@ -334,7 +327,7 @@ export const RankingBoard: React.FC = () => {
             </Table>
           )}
 
-          {/* 刷新按钮 */}
+          {/* Refresh button */}
           <div className="flex justify-center mt-4">
             <Button
               color="primary"
@@ -343,25 +336,25 @@ export const RankingBoard: React.FC = () => {
               isLoading={isLoading}
               isDisabled={!isConnected}
             >
-              {isLoading ? '加载中...' : '刷新排行榜'}
+              {isLoading ? 'Loading...' : 'Refresh Leaderboard'}
             </Button>
           </div>
         </CardBody>
       </Card>
 
-      {/* 说明文字 */}
+      {/* Description */}
       <Card className="bg-default-50">
         <CardBody>
           <div className="text-center space-y-2">
-            <h4 className="font-semibold text-default-700">📊 排行榜说明</h4>
+            <h4 className="font-semibold text-default-700">📊 Leaderboard Information</h4>
             <div className="space-y-1 text-sm text-default-500">
-              <p>• 排行榜基于用户主动揭示的余额进行排名，按照收益从高到低排序</p>
-              <p>• 初始余额为 $100,000，收益 = 当前余额 - 初始余额</p>
-              <p>• 只有选择公开余额的用户才会出现在榜单中</p>
-              <p>• 每位用户只显示最新的一次余额揭示记录</p>
+              <p>• Leaderboard is based on users' voluntarily revealed balances, ranked by profit from high to low</p>
+              <p>• Initial balance is $100,000, profit = current balance - initial balance</p>
+              <p>• Only users who choose to reveal their balances will appear on the leaderboard</p>
+              <p>• Only the latest balance reveal record is shown for each user</p>
             </div>
             <p className="text-xs text-default-400 pt-2">
-              * 余额数据通过 FHE 同态加密技术保护，确保隐私和安全
+              * Balance data is protected by FHE (Fully Homomorphic Encryption) technology, ensuring privacy and security
             </p>
           </div>
         </CardBody>

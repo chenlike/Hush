@@ -10,18 +10,18 @@ import { title } from "@/components/primitives";
 export default function TradePage() {
   const { isConnected } = useAccount();
   
-  // 持仓刷新控制状态
+  // Position refresh control state
   const [positionRefreshTrigger, setPositionRefreshTrigger] = useState(0);
   
-  // 注册状态刷新控制
+  // Registration status refresh control
   const [registrationRefreshTrigger, setRegistrationRefreshTrigger] = useState(0);
   
-  // 触发持仓刷新的函数
+  // Function to trigger position refresh
   const triggerPositionRefresh = useCallback(() => {
     setPositionRefreshTrigger(prev => prev + 1);
   }, []);
 
-  // 触发注册状态刷新的函数（当用户完成注册时调用）
+  // Function to trigger registration status refresh (called when user completes registration)
   const triggerRegistrationRefresh = useCallback(() => {
     setRegistrationRefreshTrigger(prev => prev + 1);
   }, []);
@@ -29,25 +29,25 @@ export default function TradePage() {
   return (
     <DefaultLayout>
       <section className="flex flex-col items-center justify-center gap-6 py-6 md:py-8">
-        {/* 页面标题 */}
+        {/* Page title */}
         <div className="inline-block max-w-4xl text-center justify-center">
-          <h1 className={title()}>交易中心</h1>
+          <h1 className={title()}>Trading Center</h1>
           <p className="text-default-500 mt-4">
-            管理您的 BTC 合约交易，查看持仓和账户信息
+            Manage your BTC contract trading, view positions and account information
           </p>
         </div>
 
-        {/* 主要内容区域 */}
+        {/* Main content area */}
         <div className="w-full max-w-7xl px-4">
           {!isConnected ? (
-            // 未连接钱包时显示引导页面
+            // Show guide page when wallet is not connected
             <div className="max-w-2xl mx-auto">
               <WalletConnectGuide />
             </div>
           ) : (
-            // 已连接钱包时显示交易界面
+            // Show trading interface when wallet is connected
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* 左侧列 - 交易面板 */}
+              {/* Left column - Trading Panel */}
               <div className="lg:col-span-1">
                 <TradingPanel 
                   onPositionUpdate={triggerPositionRefresh}
@@ -55,7 +55,7 @@ export default function TradePage() {
                 />
               </div>
 
-              {/* 右侧列 - 用户信息和持仓管理 */}
+              {/* Right column - User info and position management */}
               <div className="lg:col-span-2">
                 <div className="space-y-6">
                   <UserInfoPanel 

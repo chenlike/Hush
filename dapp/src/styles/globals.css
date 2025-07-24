@@ -2,7 +2,7 @@
 
 @config "../../tailwind.config.js";
 
-/* 全局暗黑模式样式 */
+/* Global dark mode styles */
 html {
   scroll-behavior: smooth;
 }
@@ -11,7 +11,7 @@ body {
   min-height: 100vh;
 }
 
-/* 确保滚动条在暗黑模式下也有正确的样式 */
+/* Ensure scrollbar has correct styles in dark mode */
 ::-webkit-scrollbar {
   width: 8px;
 }
@@ -29,7 +29,7 @@ body {
   background: rgba(156, 163, 175, 0.5);
 }
 
-/* 暗黑模式下的滚动条样式 */
+/* Scrollbar styles in dark mode */
 .dark ::-webkit-scrollbar-thumb {
   background: rgba(75, 85, 99, 0.5);
 }
@@ -38,7 +38,7 @@ body {
   background: rgba(75, 85, 99, 0.7);
 }
 
-/* Toast 动画 */
+/* Toast animations */
 @keyframes slideInFromTop {
   from {
     transform: translateY(-100%);
@@ -69,12 +69,12 @@ body {
   animation: slideOutToTop 0.3s ease-in;
 }
 
-/* 进度条动画 */
+/* Progress bar animations */
 .progress-bar {
   transition: width 0.3s ease-in-out;
 }
 
-/* Toast container 样式 */
+/* Toast container styles */
 .toast-container {
   backdrop-filter: blur(8px);
 }

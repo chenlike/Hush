@@ -25,20 +25,20 @@ export const UserRegistration: React.FC<UserRegistrationProps> = ({
 
   const contractActions = useTradingContractActions();
 
-  // 用户注册合约调用
+  // User registration contract call
   const registerCall = useContractCall(contractActions.register, {
-    title: '用户注册',
+    title: 'User Registration',
     onSuccess: () => {
       setIsRegistered(true);
-      // 调用父组件的回调函数通知注册完成
+      // Call parent component's callback function to notify registration completion
       onRegistrationComplete?.();
     },
     onError: (error) => {
-      console.error('注册失败:', error);
+      console.error('Registration failed:', error);
     }
   });
 
-  // 检查用户注册状态
+  // Check user registration status
   const checkRegistrationStatus = async () => {
     if (!address) return;
     
@@ -47,13 +47,13 @@ export const UserRegistration: React.FC<UserRegistrationProps> = ({
       const registered = await contractActions.checkUserRegistration(address);
       setIsRegistered(registered);
     } catch (error) {
-      console.error('检查注册状态失败:', error);
+      console.error('Failed to check registration status:', error);
     } finally {
       setIsCheckingRegistration(false);
     }
   };
 
-  // 检查钱包连接状态
+  // Check wallet connection status
   useEffect(() => {
     if (isConnected && address) {
       checkRegistrationStatus();
@@ -62,27 +62,27 @@ export const UserRegistration: React.FC<UserRegistrationProps> = ({
     }
   }, [isConnected, address]);
 
-  // 监听registrationRefreshTrigger，如果触发则重新检查注册状态
+  // Listen to registrationRefreshTrigger, recheck registration status if triggered
   useEffect(() => {
     if (registrationRefreshTrigger && isConnected && address) {
       checkRegistrationStatus();
     }
   }, [registrationRefreshTrigger, isConnected, address]);
 
-  // 格式化地址显示
+  // Format address display
   const formatAddress = (addr: string) => {
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
   };
 
   const getRegistrationStatus = () => {
     if (!isConnected) {
-      return { color: 'danger' as const, text: '请连接钱包' };
+      return { color: 'danger' as const, text: 'Connect Wallet' };
     } else if (isCheckingRegistration) {
-      return { color: 'warning' as const, text: '检查中...' };
+      return { color: 'warning' as const, text: 'Checking...' };
     } else if (isRegistered) {
-      return { color: 'success' as const, text: '已注册' };
+      return { color: 'success' as const, text: 'Registered' };
     } else {
-      return { color: 'warning' as const, text: '待注册' };
+      return { color: 'warning' as const, text: 'Not Registered' };
     }
   };
 
@@ -92,10 +92,10 @@ export const UserRegistration: React.FC<UserRegistrationProps> = ({
     <Card className="w-full">
       <CardBody className="p-4">
         <div className="flex items-center justify-between">
-          {/* 左侧地址和状态 */}
+          {/* Left side address and status */}
           <div className="flex items-center gap-3">
             <span className="text-sm font-mono text-default-600">
-              {address ? formatAddress(address) : '未连接钱包'}
+              {address ? formatAddress(address) : 'Wallet not connected'}
             </span>
             <Chip 
               color={status.color} 
@@ -106,7 +106,7 @@ export const UserRegistration: React.FC<UserRegistrationProps> = ({
             </Chip>
           </div>
 
-          {/* 右侧操作按钮 */}
+          {/* Right side action buttons */}
           <div className="flex items-center gap-2">
             {!isConnected ? (
               <ConnectButton />
@@ -117,10 +117,10 @@ export const UserRegistration: React.FC<UserRegistrationProps> = ({
                 onPress={registerCall.execute}
                 isLoading={registerCall.isLoading}
               >
-                {registerCall.isLoading ? '注册中...' : '立即注册'}
+                {registerCall.isLoading ? 'Registering...' : 'Register Now'}
               </Button>
             ) : (
-              <span className="text-sm text-success-600">✅ 可以交易</span>
+              <span className="text-sm text-success-600">✅ Ready</span>
             )}
           </div>
         </div>
