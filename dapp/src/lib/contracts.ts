@@ -81,12 +81,24 @@ export const useTransactionManager = () => {
     }
   }, [receipt, isError, error, txState.hash]);
 
+  // 立即设置准备状态的方法
+  const setPreparingState = useCallback(() => {
+    setTxState({
+      status: TransactionStatus.PREPARING,
+    });
+  }, []);
+
   // 执行交易的通用方法
   const executeTransaction = useCallback(async (
     transactionFn: () => Promise<`0x${string}`>
   ) => {
     try {
-      setTxState({ status: TransactionStatus.PREPARING });
+      // 如果还没有设置为 PREPARING 状态，则设置
+      setTxState(prev => 
+        prev.status === TransactionStatus.IDLE 
+          ? { status: TransactionStatus.PREPARING }
+          : prev
+      );
       
       const hash = await transactionFn();
       
@@ -121,6 +133,7 @@ export const useTransactionManager = () => {
   return {
     ...txState,
     executeTransaction,
+    setPreparingState,
     reset,
     isIdle: txState.status === TransactionStatus.IDLE,
     isPreparing: txState.status === TransactionStatus.PREPARING,
@@ -258,7 +271,7 @@ export const useTradingContractActions = () => {
       
       // 获取当前区块号，限制查询范围
       const currentBlock = await publicClient.getBlockNumber();
-      const fromBlock = currentBlock > 10000n ? currentBlock - 10000n : 0n;
+      const fromBlock = currentBlock > 5000n ? currentBlock - 5000n : 0n;
       
       console.log(`查询区块范围: ${fromBlock} 到 ${currentBlock}`);
       
@@ -517,7 +530,7 @@ export const useTradingContractActions = () => {
 
   const openPosition = useCallback(async (isLong: boolean, usdAmount: string): Promise<`0x${string}`> => {
     if (!address || !usdAmount || !fheService.isReady()) {
-      throw new Error('开仓前置条件不满足');
+      throw new Error('开仓前置条件不满足,请等待FHE加载完毕');
     }
 
     const encryptedInput = fheService.createEncryptedInput(CONTRACTS.TRADER.address, address);

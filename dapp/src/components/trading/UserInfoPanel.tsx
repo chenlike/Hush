@@ -134,7 +134,7 @@ export const UserInfoPanel: React.FC = () => {
                 <Button
                   size="sm"
                   variant="flat"
-                  color="primary"
+                  color="secondary"
                   onPress={revealBalanceCall.execute}
                   isLoading={revealBalanceCall.isLoading}
                 >
@@ -143,7 +143,7 @@ export const UserInfoPanel: React.FC = () => {
                 <Button
                   size="sm"
                   variant="flat"
-                  color="secondary"
+                  color="primary"
                   onPress={handleDecryptBalance}
                   isLoading={isDecryptingBalance}
                 >
@@ -195,27 +195,6 @@ export const UserInfoPanel: React.FC = () => {
               </p>
             </div>
 
-            {/* 刷新按钮 */}
-            <div className="flex gap-2">
-              <Button
-                size="sm"
-                variant="ghost"
-                onPress={handleRefreshBalance}
-                isLoading={isDecryptingBalance}
-                className="flex-1"
-              >
-                刷新余额
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onPress={loadLatestBalanceReveal}
-                isLoading={isLoadingReveal}
-                className="flex-1"
-              >
-                刷新揭示记录
-              </Button>
-            </div>
           </CardBody>
         </Card>
       )}

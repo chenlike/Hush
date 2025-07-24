@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import { useAccount } from 'wagmi';
 import DefaultLayout from "@/layouts/default";
 import { TradingPanel } from '@/components/trading/TradingPanel';
@@ -9,6 +9,14 @@ import { title } from "@/components/primitives";
 
 export default function TradePage() {
   const { isConnected } = useAccount();
+  
+  // 持仓刷新控制状态
+  const [positionRefreshTrigger, setPositionRefreshTrigger] = useState(0);
+  
+  // 触发持仓刷新的函数
+  const triggerPositionRefresh = useCallback(() => {
+    setPositionRefreshTrigger(prev => prev + 1);
+  }, []);
 
   return (
     <DefaultLayout>
@@ -33,14 +41,14 @@ export default function TradePage() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* 左侧列 - 交易面板 */}
               <div className="lg:col-span-1">
-                <TradingPanel />
+                <TradingPanel onPositionUpdate={triggerPositionRefresh} />
               </div>
 
               {/* 右侧列 - 用户信息和持仓管理 */}
               <div className="lg:col-span-2">
                 <div className="space-y-6">
                   <UserInfoPanel />
-                  <PositionPanel />
+                  <PositionPanel refreshTrigger={positionRefreshTrigger} />
                 </div>
               </div>
             </div>

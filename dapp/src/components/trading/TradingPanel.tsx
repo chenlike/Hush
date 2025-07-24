@@ -11,7 +11,11 @@ import {
 import { useTradingContractActions } from '@/lib/contracts';
 import { useContractCall } from '@/lib/contract-hook';
 
-export const TradingPanel: React.FC = () => {
+interface TradingPanelProps {
+  onPositionUpdate?: () => void;
+}
+
+export const TradingPanel: React.FC<TradingPanelProps> = ({ onPositionUpdate }) => {
   const [amount, setAmount] = useState('1000');
   const [isLong, setIsLong] = useState(true);
   const [positionId, setPositionId] = useState('');
@@ -27,6 +31,8 @@ export const TradingPanel: React.FC = () => {
       onSuccess: (receipt) => {
         console.log('开仓成功', receipt);
         setAmount('1000'); // 重置表单
+        // 开仓成功后触发持仓刷新
+        onPositionUpdate?.();
       }
     }
   );
@@ -40,6 +46,8 @@ export const TradingPanel: React.FC = () => {
         console.log('平仓成功', receipt);
         setPositionId('');
         setCloseAmount('');
+        // 平仓成功后也触发持仓刷新
+        onPositionUpdate?.();
       }
     }
   );

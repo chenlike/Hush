@@ -50,10 +50,16 @@ export const useContractCall = (
   }
 
   const execute = useCallback(async () => {
-    await txManager.executeTransaction(async () => {
-      // 准备阶段回调
-      onPreparing?.();
-      
+    // 立即进入准备状态，提供即时的用户反馈
+    txManager.setPreparingState();
+    
+    // 准备阶段回调
+    onPreparing?.();
+
+    // 等待100毫秒让UI有时间渲染加载动画，避免被耗时的FHE计算阻塞
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    await txManager.executeTransaction(async () => {      
       try {
         const hash = await contractFunction();
         

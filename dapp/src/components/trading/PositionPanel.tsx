@@ -60,18 +60,15 @@ export const PositionPanel: React.FC = () => {
         return;
       }
 
-      console.log('获取到的持仓ID列表:', positionIds);
 
       // 批量获取开仓时间
       const openTimes = await contractActions.getMultiplePositionOpenTimes(positionIds, address);
-      console.log('获取到的开仓时间:', openTimes);
 
       // 获取每个持仓的详情
       const positionPromises = positionIds.map(async (id) => {
         const positionInfo = await contractActions.getPosition(id);
         if (positionInfo) {
           const entryTime = openTimes[id] || new Date().toLocaleString();
-          console.log(`持仓 ${id} 的开仓时间:`, entryTime);
           
           return {
             id,
@@ -89,8 +86,12 @@ export const PositionPanel: React.FC = () => {
 
       const loadedPositions = await Promise.all(positionPromises);
       const validPositions = loadedPositions.filter(p => p !== null) as PositionData[];
-      
-      console.log('最终加载的持仓数据:', validPositions);
+      // 排序按照时间倒序
+      validPositions.sort((a, b) => {
+        const dateA = new Date(a.entryTime);
+        const dateB = new Date(b.entryTime);
+        return dateB.getTime() - dateA.getTime();
+      });
       setPositions(validPositions);
     } catch (error) {
       console.error('加载持仓失败:', error);
@@ -126,7 +127,6 @@ export const PositionPanel: React.FC = () => {
           : pos
       ));
       
-      console.log(`解密持仓 ${positionId} 成功`);
     } catch (error: any) {
       console.error('解密失败:', error);
       
@@ -152,7 +152,6 @@ export const PositionPanel: React.FC = () => {
     {
       title: '执行平仓',
       onSuccess: (receipt) => {
-        console.log('平仓成功', receipt);
         // 刷新持仓列表
         setTimeout(() => {
           loadUserPositions();
@@ -194,14 +193,11 @@ export const PositionPanel: React.FC = () => {
   // 格式化时间显示
   const formatTime = (timeString: string) => {
     try {
-      console.log('格式化时间输入:', timeString);
       
       const date = new Date(timeString);
-      console.log('解析后的日期对象:', date);
       
       // 检查是否为有效日期
       if (isNaN(date.getTime())) {
-        console.log('无效日期，返回原字符串');
         return timeString; // 如果不是有效日期，返回原字符串
       }
       
@@ -209,11 +205,9 @@ export const PositionPanel: React.FC = () => {
       const diffInMs = now.getTime() - date.getTime();
       const diffInMinutes = Math.floor(diffInMs / (1000 * 60));
       
-      console.log(`时间差: ${diffInMs}ms, ${diffInMinutes}分钟`);
       
       // 如果时间差为负数（未来时间），显示具体时间
       if (diffInMinutes < 0) {
-        console.log('未来时间，显示具体日期');
         return date.toLocaleString('zh-CN', {
           month: '2-digit',
           day: '2-digit',
