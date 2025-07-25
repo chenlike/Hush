@@ -67,7 +67,7 @@ const ToastItem: React.FC<{ toast: ToastMessage }> = ({ toast }) => {
       return <Spinner size="sm" color="primary" />;
     }
 
-    // 默认图标
+    // Default icon
     switch (toast.type) {
       case 'success':
         return <span className="text-success-600 text-lg">✅</span>;
@@ -106,12 +106,12 @@ const ToastItem: React.FC<{ toast: ToastMessage }> = ({ toast }) => {
     >
       <CardBody className="py-4">
         <div className="flex items-start gap-3">
-          {/* 图标 */}
+          {/* Icon */}
           <div className="flex-shrink-0 mt-0.5">
             {getIcon()}
           </div>
 
-          {/* 内容 */}
+          {/* Content */}
           <div className="flex-1 min-w-0">
             <h4 className={`text-sm font-semibold ${getTitleColor()}`}>
               {toast.title}
@@ -120,14 +120,14 @@ const ToastItem: React.FC<{ toast: ToastMessage }> = ({ toast }) => {
               {toast.message}
             </p>
 
-            {/* 交易哈希 */}
+            {/* Transaction hash */}
             {toast.txHash && (
               <p className="text-xs text-default-500 mt-2 font-mono">
                 tx: {toast.txHash}
               </p>
             )}
 
-            {/* 进度条 */}
+            {/* Progress bar */}
             {showProgress && (
               <Progress 
                 value={getProgress()} 
@@ -138,7 +138,7 @@ const ToastItem: React.FC<{ toast: ToastMessage }> = ({ toast }) => {
             )}
           </div>
 
-          {/* 关闭按钮 */}
+          {/* Close button */}
           <Button
             isIconOnly
             size="sm"

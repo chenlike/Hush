@@ -1,4 +1,4 @@
-// 合约配置
+// Contract configuration
 export const CONTRACTS = {
     PRICE_ORACLE: {
         address: '0x7cdc8EE2c834891E16C87c97c9933fB212d82144' as `0x${string}`,

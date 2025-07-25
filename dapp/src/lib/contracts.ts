@@ -261,21 +261,21 @@ export const useTradingContractActions = () => {
     }
   }, [publicClient]);
 
-  // 查询PositionOpened事件来获取真实的开仓时间
+  // Query PositionOpened events to get actual position opening time
   const getPositionOpenTime = useCallback(async (positionId: string, userAddress?: string): Promise<string> => {
     const targetAddress = userAddress || address;
     if (!targetAddress || !publicClient) return new Date().toLocaleString();
 
     try {
-      console.log(`查询持仓 ${positionId} 的开仓时间，用户地址: ${targetAddress}`);
+      console.log(`Querying opening time for position ${positionId}, user address: ${targetAddress}`);
       
-      // 获取当前区块号，限制查询范围
+      // Get current block number, limit query range
       const currentBlock = await publicClient.getBlockNumber();
       const fromBlock = currentBlock > 5000n ? currentBlock - 5000n : 0n;
       
-      console.log(`查询区块范围: ${fromBlock} 到 ${currentBlock}`);
+      console.log(`Query block range: ${fromBlock} to ${currentBlock}`);
       
-      // 使用合约事件查询
+      // Use contract event query
       const logs = await publicClient.getContractEvents({
         address: CONTRACTS.TRADER.address,
         abi: CONTRACTS.TRADER.abi,
@@ -377,9 +377,9 @@ export const useTradingContractActions = () => {
       const currentBlock = await publicClient.getBlockNumber();
       const fromBlock = currentBlock > 10000n ? currentBlock - 10000n : 0n;
       
-      console.log(`查询区块范围: ${fromBlock} 到 ${currentBlock}`);
+      console.log(`Query block range: ${fromBlock} to ${currentBlock}`);
       
-      // 使用合约事件查询，限制区块范围避免RPC限制
+      // Use contract event query, limit block range to avoid RPC limits
       const logs = await publicClient.getContractEvents({
         address: CONTRACTS.TRADER.address,
         abi: CONTRACTS.TRADER.abi,
@@ -451,21 +451,21 @@ export const useTradingContractActions = () => {
     }
   }, [address, publicClient]);
 
-  // 备用方案：使用更小的区块范围
+  // Fallback approach: use smaller block range
   const getMultiplePositionOpenTimesWithSmallRange = useCallback(async (positionIds: string[], userAddress?: string): Promise<Record<string, string>> => {
     const targetAddress = userAddress || address;
     if (!targetAddress || !publicClient || positionIds.length === 0) return {};
 
     try {
-      console.log('使用备用方案查询最近1000个区块');
+      console.log('Using fallback approach to query recent 1000 blocks');
       
       const result: Record<string, string> = {};
       
-      // 只查询最近的1000个区块
+      // Only query recent 1000 blocks
       const currentBlock = await publicClient.getBlockNumber();
       const fromBlock = currentBlock > 1000n ? currentBlock - 1000n : 0n;
       
-      console.log(`备用查询区块范围: ${fromBlock} 到 ${currentBlock}`);
+      console.log(`Fallback query block range: ${fromBlock} to ${currentBlock}`);
       
       const logs = await publicClient.getContractEvents({
         address: CONTRACTS.TRADER.address,
@@ -478,7 +478,7 @@ export const useTradingContractActions = () => {
         toBlock: 'latest'
       });
 
-      console.log(`备用方案获取到 ${logs.length} 个PositionOpened事件`);
+      console.log(`Fallback approach got ${logs.length} PositionOpened events`);
 
       // 根据持仓ID匹配时间戳
       positionIds.forEach(positionId => {
@@ -505,9 +505,9 @@ export const useTradingContractActions = () => {
 
       return result;
     } catch (error) {
-      console.error('备用方案也失败:', error);
+      console.error('Fallback approach also failed:', error);
       
-      // 最终失败，返回默认时间
+      // Final failure, return default time
       const result: Record<string, string> = {};
       positionIds.forEach(id => {
         result[id] = new Date().toLocaleString();
@@ -516,7 +516,7 @@ export const useTradingContractActions = () => {
     }
   }, [address, publicClient]);
 
-  // 基础合约调用方法
+  // Basic contract call methods
   const register = useCallback(async (): Promise<`0x${string}`> => {
     if (!address) throw new Error('Wallet not connected');
     
@@ -623,7 +623,7 @@ export const useTradingContractActions = () => {
     }
   }, [publicClient]);
 
-    // 获取所有排行榜数据（先获取用户地址，再逐个获取余额数据）
+    // Get all leaderboard data (first get user addresses, then get balance data for each)
   const getAllBalanceReveals = useCallback(async (): Promise<Array<{
     user: string;
     amount: number;
@@ -634,9 +634,9 @@ export const useTradingContractActions = () => {
     if (!publicClient) return null;
 
     try {
-      console.log('获取所有已解密用户地址...');
+      console.log('Getting all decrypted user addresses...');
       
-      // 1. 先获取所有已解密的用户地址
+      // 1. First get all decrypted user addresses
       const revealedUsers = await publicClient.readContract({
         address: CONTRACTS.TRADER.address,
         abi: CONTRACTS.TRADER.abi,
@@ -645,13 +645,13 @@ export const useTradingContractActions = () => {
       });
 
       if (!revealedUsers || !Array.isArray(revealedUsers) || revealedUsers.length === 0) {
-        console.log('没有找到已解密的用户:', revealedUsers);
+        console.log('No decrypted users found:', revealedUsers);
         return [];
       }
 
-      console.log(`找到 ${revealedUsers.length} 个已解密用户:`, revealedUsers);
+      console.log(`Found ${revealedUsers.length} decrypted users:`, revealedUsers);
 
-      // 2. 并行获取每个用户的余额解密数据
+      // 2. Get balance decryption data for each user in parallel
       const balancePromises = revealedUsers.map(async (userAddress: string) => {
         try {
           const balanceReveal = await publicClient.readContract({
@@ -667,7 +667,7 @@ export const useTradingContractActions = () => {
             const timestampNum = Number(timestamp);
             
             if (amountNum > 0) {
-              const initialAmount = 100000; // 初始余额
+              const initialAmount = 100000; // Initial balance
               const profit = amountNum - initialAmount;
               const profitPercentage = ((profit / initialAmount) * 100);
 
@@ -682,25 +682,25 @@ export const useTradingContractActions = () => {
           }
           return null;
         } catch (error) {
-          console.error(`获取用户 ${userAddress} 余额数据失败:`, error);
+          console.error(`Failed to get balance data for user ${userAddress}:`, error);
           return null;
         }
       });
 
-      // 3. 等待所有余额数据获取完成
+      // 3. Wait for all balance data to be retrieved
       const balanceResults = await Promise.all(balancePromises);
       
-      // 4. 过滤掉无效数据
+      // 4. Filter out invalid data
       const validResults = balanceResults.filter(result => result !== null);
       
-      // 5. 按收益从高到低排序
+      // 5. Sort by profit from high to low
       const sortedResults = validResults.sort((a, b) => b.profit - a.profit);
       
-      console.log('处理后的排行榜数据:', sortedResults);
+      console.log('Processed leaderboard data:', sortedResults);
       return sortedResults;
 
     } catch (error: any) {
-      console.error('获取排行榜数据失败:', error);
+      console.error('Failed to get leaderboard data:', error);
       return null;
     }
   }, [publicClient]);
@@ -780,7 +780,7 @@ export const useTradingContractActions = () => {
     return null;
   };
 
-  // 获取已解密用户数量
+  // Get number of decrypted users
   const getRevealedUsersCount = useCallback(async (): Promise<number> => {
     if (!publicClient) return 0;
 

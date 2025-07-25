@@ -10,7 +10,7 @@ export const FHEStatus = () => {
   const [isInitializing, setIsInitializing] = useState(false);
 
   useEffect(() => {
-    // 页面加载时自动初始化FHE
+    // Auto-initialize FHE on page load
     const initializeOnLoad = async () => {
       if (fheService.isReady()) {
         setStatus('ready');
@@ -46,7 +46,7 @@ export const FHEStatus = () => {
       }
     };
     
-    // 定期检查状态
+    // Check status periodically
     const interval = setInterval(checkStatus, 1000);
     return () => clearInterval(interval);
   }, []);

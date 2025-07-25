@@ -23,17 +23,17 @@ export interface ContractCallResult {
 }
 
 /**
- * 通用的合约调用 hook，自动处理 toast 通知和状态管理
- * @param contractFunction 合约调用函数，需要返回 Promise<`0x${string}`>
- * @param options 配置选项，包括标题、回调等
- * @returns 包含执行函数和状态的对象
+ * Universal contract call hook that automatically handles toast notifications and state management
+ * @param contractFunction Contract call function that should return Promise<`0x${string}`>
+ * @param options Configuration options, including title, callbacks etc
+ * @returns Object containing execution function and state
  */
 export const useContractCall = (
   contractFunction: () => Promise<`0x${string}`>,
   options: ContractCallOptions = {}
 ): ContractCallResult => {
   const {
-    title = '合约交易',
+    title = 'Contract Transaction',
     showToast = true,
     onSuccess,
     onError,
@@ -44,39 +44,39 @@ export const useContractCall = (
 
   const txManager = useTransactionManager();
   
-  // 只在启用 toast 时使用 toast hook
+  // Only use toast hook when toast is enabled
   if (showToast) {
     useTransactionToast(txManager, title);
   }
 
   const execute = useCallback(async () => {
-    // 立即进入准备状态，提供即时的用户反馈
+    // Immediately enter preparing state to provide instant user feedback
     txManager.setPreparingState();
     
-    // 准备阶段回调
+    // Preparing phase callback
     onPreparing?.();
 
-    // 等待100毫秒让UI有时间渲染加载动画，避免被耗时的FHE计算阻塞
+    // Wait 100ms to let UI render loading animation, avoid being blocked by time-consuming FHE computation
     await new Promise(resolve => setTimeout(resolve, 100));
 
     await txManager.executeTransaction(async () => {      
       try {
         const hash = await contractFunction();
         
-        // 交易发起成功回调
+        // Transaction initiation success callback
         onPending?.(hash);
         
         return hash;
       } catch (error: any) {
-        // 错误处理
-        const errorMessage = error.message || '合约调用失败';
+        // Error handling
+        const errorMessage = error.message || 'Contract call failed';
         onError?.(errorMessage);
         throw error;
       }
     });
   }, [contractFunction, txManager, onPreparing, onPending, onError]);
 
-  // 监听状态变化，触发相应回调
+  // Listen to status changes and trigger corresponding callbacks
   const handleStatusChange = useCallback(() => {
     if (txManager.status === TransactionStatus.CONFIRMING) {
       onConfirming?.();
@@ -87,7 +87,7 @@ export const useContractCall = (
     }
   }, [txManager.status, txManager.receipt, txManager.error, onConfirming, onSuccess, onError]);
 
-  // 在状态变化时触发回调
+  // Trigger callbacks when status changes
   React.useEffect(() => {
     handleStatusChange();
   }, [handleStatusChange]);
@@ -104,10 +104,10 @@ export const useContractCall = (
 };
 
 /**
- * 批量合约调用 hook，支持顺序执行多个合约调用
- * @param contractFunctions 合约调用函数数组
- * @param options 配置选项
- * @returns 包含批量执行函数和状态的对象
+ * Batch contract call hook that supports sequential execution of multiple contract calls
+ * @param contractFunctions Array of contract call functions
+ * @param options Configuration options
+ * @returns Object containing batch execution function and state
  */
 export const useBatchContractCall = (
   contractFunctions: Array<() => Promise<`0x${string}`>>,
@@ -117,7 +117,7 @@ export const useBatchContractCall = (
   } = {}
 ) => {
   const {
-    title = '批量交易',
+    title = 'Batch Transaction',
     titles = [],
     showToast = true,
     stopOnError = true,
@@ -145,7 +145,7 @@ export const useBatchContractCall = (
           return hash;
         });
         
-        // 等待当前交易完成再进行下一个
+        // Wait for current transaction to complete before proceeding to the next
         while (txManager.isLoading) {
           await new Promise(resolve => setTimeout(resolve, 100));
         }
@@ -161,14 +161,14 @@ export const useBatchContractCall = (
       }
     }
     
-    // 批量执行完成回调
+    // Batch execution completion callback
     const successCount = results.filter(r => r.success).length;
     const failCount = results.length - successCount;
     
     if (failCount === 0) {
       onSuccess?.(results);
     } else {
-      onError?.(`批量执行完成: ${successCount} 成功, ${failCount} 失败`);
+      onError?.(`Batch execution completed: ${successCount} successful, ${failCount} failed`);
     }
     
     return results;
@@ -186,11 +186,11 @@ export const useBatchContractCall = (
 };
 
 /**
- * 便捷的合约调用 hooks，预设了常用的合约操作
+ * Convenient contract call hooks with preset common contract operations
  */
 export const useContractCallHelpers = () => {
   /**
-   * 静默合约调用（不显示 toast）
+   * Silent contract call (no toast display)
    */
   const callSilently = useCallback((
     contractFunction: () => Promise<`0x${string}`>,
@@ -200,7 +200,7 @@ export const useContractCallHelpers = () => {
   }, []);
 
   /**
-   * 带成功提示的合约调用
+   * Contract call with success notification
    */
   const callWithSuccess = useCallback((
     contractFunction: () => Promise<`0x${string}`>,
@@ -211,7 +211,7 @@ export const useContractCallHelpers = () => {
       title,
       onSuccess: () => {
         if (successMessage) {
-          // 这里可以显示额外的成功消息
+          // Additional success message can be displayed here
           console.log(successMessage);
         }
       }
@@ -219,7 +219,7 @@ export const useContractCallHelpers = () => {
   }, []);
 
   /**
-   * 带确认的合约调用
+   * Contract call with confirmation
    */
   const callWithConfirmation = useCallback((
     contractFunction: () => Promise<`0x${string}`>,
@@ -230,7 +230,7 @@ export const useContractCallHelpers = () => {
       if (window.confirm(confirmMessage)) {
         return await contractFunction();
       }
-      throw new Error('用户取消了操作');
+      throw new Error('User cancelled the operation');
     }, { title });
   }, []);
 

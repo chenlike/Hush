@@ -210,7 +210,7 @@ export const TradingPanel: React.FC<TradingPanelProps> = ({
           <p className="text-small text-default-500">Execute contract trading operations</p>
         </div>
         
-        {/* BTC价格显示区域 */}
+        {/* BTC price display area */}
         <div className="flex flex-col items-end gap-1">
           <div className="flex items-center gap-2">
             <div className="text-right">
@@ -234,7 +234,7 @@ export const TradingPanel: React.FC<TradingPanelProps> = ({
               )}
             </div>
             
-            {/* 手动刷新按钮 */}
+            {/* Manual refresh button */}
             <Button
               size="sm"
               variant="flat"

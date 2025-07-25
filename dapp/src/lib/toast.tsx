@@ -37,12 +37,12 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const newToast: ToastMessage = {
       ...toast,
       id,
-      duration: toast.duration || 0, // 默认不自动消失
+      duration: toast.duration || 0, // Default: no auto-dismiss
     };
 
     setToasts(prev => [...prev, newToast]);
 
-    // 只有明确设置了 duration > 0 且不是交易相关的 toast 才自动移除
+    // Only auto-remove toasts with explicitly set duration > 0 and not transaction-related
     if (newToast.duration && newToast.duration > 0 && !newToast.txHash && !newToast.status) {
       setTimeout(() => {
         removeToast(id);
@@ -65,11 +65,11 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const showTransactionToast = useCallback((title: string, txHash?: string) => {
     return addToast({
       title,
-      message: '准备交易...',
+      message: 'Preparing transaction...',
       type: 'info',
       txHash,
       status: TransactionStatus.PREPARING,
-      duration: 0, // 不自动移除，需要手动管理
+      duration: 0, // No auto-removal, manual management required
     });
   }, [addToast]);
 
