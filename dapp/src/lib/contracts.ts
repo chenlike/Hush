@@ -287,20 +287,20 @@ export const useTradingContractActions = () => {
         toBlock: 'latest'
       });
 
-      console.log(`获取到 ${logs.length} 个PositionOpened事件:`, logs);
+      console.log(`Got ${logs.length} PositionOpened events:`, logs);
 
-      // 在所有日志中查找匹配的持仓ID
+      // Find matching position ID in all logs
       const matchingLog = logs.find(log => 
         log.args && String(log.args.positionId) === positionId
       );
 
-      console.log(`匹配持仓 ${positionId} 的日志:`, matchingLog);
+      console.log(`Matching log for position ${positionId}:`, matchingLog);
 
       if (matchingLog && matchingLog.args && matchingLog.args.timestamp) {
-        // block.timestamp 是秒，需要转换为毫秒
+        // block.timestamp is in seconds, need to convert to milliseconds
         const timestamp = Number(matchingLog.args.timestamp) * 1000;
         const date = new Date(timestamp);
-        console.log(`持仓 ${positionId} 的区块时间戳: ${matchingLog.args.timestamp}秒, 转换为: ${date}`);
+        console.log(`Block timestamp for position ${positionId}: ${matchingLog.args.timestamp}s, converted to: ${date}`);
         
         return date.toLocaleString('zh-CN', {
           year: 'numeric',
@@ -312,15 +312,15 @@ export const useTradingContractActions = () => {
         });
       }
 
-      console.log(`未找到持仓 ${positionId} 的开仓事件（可能在更早的区块中）`);
-      // 如果没有找到事件，返回提示
-      return '较早创建';
+      console.log(`Position ${positionId} opening event not found (may be in earlier blocks)`);
+      // If no event found, return indication
+      return 'Created earlier';
     } catch (error) {
-      console.error('查询开仓事件失败:', error);
+      console.error('Query opening event failed:', error);
       
-      // 如果是区块范围错误，尝试更小的范围
+      // If block range error, try smaller range
       if (error instanceof Error && error.message.includes('ranges over')) {
-        console.log('尝试使用更小的区块范围查询单个持仓...');
+        console.log('Try using smaller block range to query single position...');
         try {
           const currentBlock = await publicClient.getBlockNumber();
           const fromBlock = currentBlock > 1000n ? currentBlock - 1000n : 0n;
@@ -354,7 +354,7 @@ export const useTradingContractActions = () => {
             });
           }
         } catch (retryError) {
-          console.error('重试也失败:', retryError);
+          console.error('Retry also failed:', retryError);
         }
       }
       
@@ -362,18 +362,18 @@ export const useTradingContractActions = () => {
     }
   }, [address, publicClient]);
 
-  // 批量获取多个持仓的开仓时间
+  // Batch get opening times for multiple positions
   const getMultiplePositionOpenTimes = useCallback(async (positionIds: string[], userAddress?: string): Promise<Record<string, string>> => {
     const targetAddress = userAddress || address;
     if (!targetAddress || !publicClient || positionIds.length === 0) return {};
 
     try {
-      console.log(`批量查询 ${positionIds.length} 个持仓的开仓时间，用户地址: ${targetAddress}`);
-      console.log('持仓ID列表:', positionIds);
+      console.log(`Batch querying opening times for ${positionIds.length} positions, user address: ${targetAddress}`);
+      console.log('Position ID list:', positionIds);
       
       const result: Record<string, string> = {};
       
-      // 获取当前区块号，然后向前查询最近的10000个区块
+      // Get current block number, then query backwards for recent 10000 blocks
       const currentBlock = await publicClient.getBlockNumber();
       const fromBlock = currentBlock > 10000n ? currentBlock - 10000n : 0n;
       
@@ -391,30 +391,30 @@ export const useTradingContractActions = () => {
         toBlock: 'latest'
       });
 
-      console.log(`获取到 ${logs.length} 个PositionOpened事件:`, logs);
+      console.log(`Got ${logs.length} PositionOpened events:`, logs);
 
-      // 按时间倒序排序
+      // Sort by time in descending order
       const sortedLogs = logs.sort((a, b) => {
         const timeA = a.args?.timestamp ? Number(a.args.timestamp) : 0;
         const timeB = b.args?.timestamp ? Number(b.args.timestamp) : 0;
         return timeB - timeA;
       });
 
-      console.log('排序后的事件日志:', sortedLogs);
+      console.log('Sorted event logs:', sortedLogs);
 
-      // 根据持仓ID匹配时间戳
+      // Match timestamps by position ID
       positionIds.forEach(positionId => {
         const matchingLog = sortedLogs.find(log => 
           log.args && String(log.args.positionId) === positionId
         );
         
-        console.log(`持仓 ${positionId} 匹配的日志:`, matchingLog);
+        console.log(`Matching log for position ${positionId}:`, matchingLog);
         
         if (matchingLog && matchingLog.args && matchingLog.args.timestamp) {
-          // block.timestamp 是秒，需要转换为毫秒
+          // block.timestamp is in seconds, need to convert to milliseconds
           const timestamp = Number(matchingLog.args.timestamp) * 1000;
           const date = new Date(timestamp);
-          console.log(`持仓 ${positionId} 的区块时间戳: ${matchingLog.args.timestamp}秒, 转换为: ${date}`);
+          console.log(`Block timestamp for position ${positionId}: ${matchingLog.args.timestamp}s, converted to: ${date}`);
           
           result[positionId] = date.toLocaleString('zh-CN', {
             year: 'numeric',
@@ -425,24 +425,24 @@ export const useTradingContractActions = () => {
             second: '2-digit'
           });
         } else {
-          console.log(`持仓 ${positionId} 未找到匹配的事件日志（可能在更早的区块中）`);
-          // 如果在最近的区块中没有找到，尝试备用方案
-          result[positionId] = '较早创建';
+          console.log(`Position ${positionId} no matching event log found (may be in earlier blocks)`);
+          // If not found in recent blocks, try fallback approach
+          result[positionId] = 'Created earlier';
         }
       });
 
-      console.log('最终结果:', result);
+      console.log('Final result:', result);
       return result;
     } catch (error) {
-      console.error('批量查询开仓事件失败:', error);
+      console.error('Batch query opening events failed:', error);
       
-      // 如果还是失败，使用更小的范围重试
+      // If still fails, retry with smaller range
       if (error instanceof Error && error.message.includes('ranges over')) {
-        console.log('尝试使用更小的区块范围重试...');
+        console.log('Try using smaller block range to retry...');
         return await getMultiplePositionOpenTimesWithSmallRange(positionIds, userAddress);
       }
       
-      // 返回默认时间
+      // Return default time
       const result: Record<string, string> = {};
       positionIds.forEach(id => {
         result[id] = new Date().toLocaleString();
@@ -480,7 +480,7 @@ export const useTradingContractActions = () => {
 
       console.log(`Fallback approach got ${logs.length} PositionOpened events`);
 
-      // 根据持仓ID匹配时间戳
+      // Match timestamps by position ID
       positionIds.forEach(positionId => {
         const matchingLog = logs.find(log => 
           log.args && String(log.args.positionId) === positionId
@@ -499,7 +499,7 @@ export const useTradingContractActions = () => {
             second: '2-digit'
           });
         } else {
-          result[positionId] = '较早创建';
+          result[positionId] = 'Created earlier';
         }
       });
 
