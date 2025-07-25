@@ -60,8 +60,6 @@ export const RankingBoard: React.FC = () => {
 
   // Load leaderboard data
   const loadRankingData = async () => {
-    if (!isConnected) return;
-    
     setIsLoading(true);
     try {
       const balanceReveals = await contractActions.getAllBalanceReveals();
@@ -75,14 +73,18 @@ export const RankingBoard: React.FC = () => {
           profit: reveal.profit,
           profitPercentage: reveal.profitPercentage,
           lastRevealTime: formatTime(reveal.timestamp),
-          isCurrentUser: reveal.user.toLowerCase() === address?.toLowerCase()
+          isCurrentUser: isConnected && address ? reveal.user.toLowerCase() === address.toLowerCase() : false
         }));
 
         setRankings(rankingUsers);
         
-        // Set current user ranking
-        const userRank = rankingUsers.find(user => user.isCurrentUser);
-        setCurrentUserRank(userRank || null);
+        // Set current user ranking (only when wallet is connected)
+        if (isConnected && address) {
+          const userRank = rankingUsers.find(user => user.isCurrentUser);
+          setCurrentUserRank(userRank || null);
+        } else {
+          setCurrentUserRank(null);
+        }
         
         setLastUpdateTime(new Date());
       } else {
@@ -97,9 +99,7 @@ export const RankingBoard: React.FC = () => {
   };
 
   useEffect(() => {
-    if (isConnected) {
-      loadRankingData();
-    }
+    loadRankingData();
   }, [isConnected, address]);
 
   const formatAddress = (address: string) => {
@@ -153,8 +153,8 @@ export const RankingBoard: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Current user ranking card */}
-      {currentUserRank && (
+      {/* Current user ranking card - only show when wallet is connected */}
+      {isConnected && currentUserRank && (
         <Card className="border-2 border-primary-200 bg-primary-50">
           <CardHeader>
             <div className="flex items-center gap-3">
@@ -230,11 +230,13 @@ export const RankingBoard: React.FC = () => {
               <div className="text-6xl mb-4">📊</div>
               <h3 className="text-lg font-semibold mb-2">No ranking data yet</h3>
               <p className="text-sm text-center max-w-md">
-                No users have revealed their balances yet. Be the first to reveal your balance!
+                No users have revealed their balances yet. {isConnected ? 'Be the first to reveal your balance!' : 'Connect your wallet to participate in the leaderboard.'}
               </p>
-              <p className="text-xs text-center mt-2 text-default-400">
-                Click "Balance Reveal" in the user info panel to reveal your balance
-              </p>
+              {isConnected && (
+                <p className="text-xs text-center mt-2 text-default-400">
+                  Click "Balance Reveal" in the user info panel to reveal your balance
+                </p>
+              )}
             </div>
           ) : (
             /* Leaderboard table */
@@ -334,7 +336,7 @@ export const RankingBoard: React.FC = () => {
               variant="flat"
               onPress={loadRankingData}
               isLoading={isLoading}
-              isDisabled={!isConnected}
+              isDisabled={false}
             >
               {isLoading ? 'Loading...' : 'Refresh Leaderboard'}
             </Button>
