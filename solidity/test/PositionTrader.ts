@@ -13,17 +13,17 @@ type Signers = {
 };
 
 async function deployFixture() {
-  // 部署价格预言机（使用模拟的聚合器地址）
+  // Deploy price oracle (using mock aggregator address)
   const mockAggregatorAddress = "0x0000000000000000000000000000000000000001";
   const oracleFactory = (await ethers.getContractFactory("PriceOracle")) as PriceOracle__factory;
   const priceOracle = await oracleFactory.deploy(mockAggregatorAddress);
   const priceOracleAddress = await priceOracle.getAddress();
 
-  // 启用手动模式并设置测试价格
+  // Enable manual mode and set test price
   await priceOracle.setManualMode(true);
   await priceOracle.setManualPrice(50000); // $50,000
 
-  // 部署PositionTrader合约（构造函数参数：priceOracle地址，初始资金1000 USD）
+  // Deploy PositionTrader contract (constructor parameters: priceOracle address, initial funds 1000 USD)
   const factory = (await ethers.getContractFactory("PositionTrader")) as any;
   const positionTrader = (await factory.deploy(priceOracleAddress, 1000)) as any;
   const positionTraderAddress = await positionTrader.getAddress();
@@ -36,7 +36,7 @@ async function deployFixture() {
   };
 }
 
-describe("PositionTrader 完整测试", function () {
+describe("PositionTrader Complete Test", function () {
   let signers: Signers;
   let positionTrader: any;
   let positionTraderAddress: string;
@@ -54,9 +54,9 @@ describe("PositionTrader 完整测试", function () {
   });
 
   beforeEach(async () => {
-    // 检查是否在FHEVM模拟环境中运行
+    // Check if running in FHEVM mock environment
     if (!fhevm.isMock) {
-      throw new Error(`此hardhat测试套件只能在FHEVM模拟环境中运行`);
+      throw new Error(`This hardhat test suite can only run in FHEVM mock environment`);
     }
     ({ 
       positionTrader, 
@@ -66,89 +66,89 @@ describe("PositionTrader 完整测试", function () {
     } = await deployFixture());
   });
 
-  describe("合约部署和初始化", function () {
-    it("应该正确部署合约", async function () {
+  describe("Contract Deployment and Initialization", function () {
+    it("should deploy contract correctly", async function () {
       expect(positionTraderAddress).to.be.a('string');
       expect(priceOracleAddress).to.be.a('string');
     });
 
-    it("应该正确设置价格预言机地址", async function () {
+    it("should set price oracle address correctly", async function () {
       const oracleAddress = await positionTrader.priceOracleAddress();
       expect(oracleAddress).to.equal(priceOracleAddress);
     });
 
-    it("应该正确设置初始虚拟资产", async function () {
+    it("should set initial virtual assets correctly", async function () {
       const initialCash = await positionTrader.INITIAL_CASH_BASE();
       expect(initialCash).to.equal(1000);
     });
 
-    it("应该正确获取当前BTC价格", async function () {
+    it("should get current BTC price correctly", async function () {
       const price = await positionTrader.getCurrentBtcPrice();
       expect(price).to.equal(50000);
     });
   });
 
-  describe("用户注册功能", function () {
-    it("应该允许用户注册", async function () {
-      // 检查用户初始状态
+  describe("User Registration Function", function () {
+    it("should allow user registration", async function () {
+      // Check user initial state
       expect(await positionTrader.isRegistered(signers.alice.address)).to.be.false;
 
-      // 用户注册
+      // User registration
       const tx = await positionTrader.connect(signers.alice).register();
       await tx.wait();
 
-      // 验证注册状态
+      // Verify registration status
       expect(await positionTrader.isRegistered(signers.alice.address)).to.be.true;
     });
 
-    it("不应该允许用户重复注册", async function () {
-      // 第一次注册
+    it("should not allow user to register twice", async function () {
+      // First registration
       let tx = await positionTrader.connect(signers.alice).register();
       await tx.wait();
 
-      // 尝试第二次注册，应该失败
+      // Try second registration, should fail
       await expect(
         positionTrader.connect(signers.alice).register()
       ).to.be.revertedWith("User already registered");
     });
 
-    it("应该允许多个用户独立注册", async function () {
-      // Alice 注册
+    it("should allow multiple users to register independently", async function () {
+      // Alice registration
       let tx = await positionTrader.connect(signers.alice).register();
       await tx.wait();
 
-      // Bob 注册
+      // Bob registration
       tx = await positionTrader.connect(signers.bob).register();
       await tx.wait();
 
-      // 验证两个用户都已注册
+      // Verify both users are registered
       expect(await positionTrader.isRegistered(signers.alice.address)).to.be.true;
       expect(await positionTrader.isRegistered(signers.bob.address)).to.be.true;
     });
 
-    it("注册时应该触发UserRegistered事件", async function () {
+    it("registration should trigger UserRegistered event", async function () {
       await expect(positionTrader.connect(signers.alice).register())
         .to.emit(positionTrader, "UserRegistered")
         .withArgs(signers.alice.address);
     });
   });
 
-  describe("余额查询功能", function () {
+  describe("Balance Query Function", function () {
     beforeEach(async () => {
-      // 注册用户
+      // Register user
       const tx = await positionTrader.connect(signers.alice).register();
       await tx.wait();
     });
 
-    it("应该正确返回注册用户的余额", async function () {
-      // 获取余额（这是密文）
+    it("should return registered user's balance correctly", async function () {
+      // Get balance (this is encrypted)
       const encryptedBalance = await positionTrader.getBalance(signers.alice.address);
       
-      // 验证返回的是有效的FHE密文格式
+      // Verify return is a valid FHE ciphertext format
       expect(encryptedBalance).to.be.a('string');
       expect(encryptedBalance.length).to.be.greaterThan(0);
       
-      // 解密余额并验证初始金额
+      // Decrypt balance and verify initial amount
       const clearBalance = await fhevm.userDecryptEuint(
         FhevmType.euint64,
         encryptedBalance,
@@ -156,29 +156,29 @@ describe("PositionTrader 完整测试", function () {
         signers.alice
       );
       
-      // 验证初始余额为1000 USD
+      // Verify initial balance is 1000 USD
       expect(clearBalance).to.equal(1000);
     });
 
-    it("未注册用户查询余额应该失败", async function () {
+    it("unregistered user should fail to query balance", async function () {
       await expect(
         positionTrader.getBalance(signers.bob.address)
       ).to.be.revertedWith("User not registered");
     });
 
-    it("应该支持余额解密请求", async function () {
+    it("should support balance decryption request", async function () {
       const requestTx = await positionTrader.connect(signers.alice).revealMyBalance();
       const receipt = await requestTx.wait();
       
-      // 验证事件
+      // Verify event
       const event = receipt.logs.find((log: any) => 
         log.fragment && log.fragment.name === "DecryptionRequested"
       );
       expect(event).to.not.be.undefined;
     });
 
-    it("应该在交易后正确更新余额", async function () {
-      // 获取初始余额
+    it("should correctly update balance after a transaction", async function () {
+      // Get initial balance
       const initialEncryptedBalance = await positionTrader.getBalance(signers.alice.address);
       const initialClearBalance = await fhevm.userDecryptEuint(
         FhevmType.euint64,
@@ -188,7 +188,7 @@ describe("PositionTrader 完整测试", function () {
       );
       expect(initialClearBalance).to.equal(1000);
       
-      // 开仓10张合约
+      // Open position 10 contracts
       const encryptedInput = await fhevm
         .createEncryptedInput(positionTraderAddress, signers.alice.address)
         .addBool(true)
@@ -201,7 +201,7 @@ describe("PositionTrader 完整测试", function () {
         encryptedInput.inputProof
       );
       
-      // 获取开仓后余额
+      // Get balance after opening position
       const afterOpenEncryptedBalance = await positionTrader.getBalance(signers.alice.address);
       const afterOpenClearBalance = await fhevm.userDecryptEuint(
         FhevmType.euint64,
@@ -210,27 +210,27 @@ describe("PositionTrader 完整测试", function () {
         signers.alice
       );
       
-      // 开仓后余额应该减少（被用作保证金）
+      // Balance after opening position should decrease (used as margin)
       expect(afterOpenClearBalance).to.be.lessThan(initialClearBalance);
     });
 
-    it("应该正确获取最新的余额解密记录", async function () {
+    it("should correctly get the latest balance decryption record", async function () {
       const [amount, timestamp] = await positionTrader.getLatestBalanceReveal(signers.alice.address);
       
-      // 初始时应该没有解密记录
+      // Should have no decryption records initially
       expect(amount).to.equal(0);
       expect(timestamp).to.equal(0);
     });
   });
 
-  describe("价格获取功能", function () {
-    it("应该正确获取调整后的BTC价格", async function () {
+  describe("Price Query Function", function () {
+    it("should get adjusted BTC price correctly", async function () {
       const price = await positionTrader.getCurrentBtcPrice();
       expect(price).to.equal(50000);
     });
 
-    it("价格变化时应该反映在合约中", async function () {
-      // 更改价格
+    it("price change should reflect in the contract", async function () {
+      // Change price
       await priceOracle.setManualPrice(60000);
       
       const newPrice = await positionTrader.getCurrentBtcPrice();
@@ -238,52 +238,52 @@ describe("PositionTrader 完整测试", function () {
     });
   });
 
-  describe("持仓相关功能", function () {
+  describe("Position Related Functions", function () {
     beforeEach(async () => {
-      // 注册用户
+      // Register user
       const tx = await positionTrader.connect(signers.alice).register();
       await tx.wait();
     });
 
-    it("应该正确获取用户持仓ID列表", async function () {
+    it("should correctly get user position ID list", async function () {
       const positions = await positionTrader.getUserPositionIds(signers.alice.address);
       expect(positions).to.be.an('array');
-      expect(positions.length).to.equal(0); // 初始时没有持仓
+      expect(positions.length).to.equal(0); // No positions initially
     });
 
-    it("应该能查询持仓信息（即使持仓不存在）", async function () {
+    it("should be able to query position information (even if position does not exist)", async function () {
       const [owner, contractCount, btcSize, entryPrice, isLong] = 
         await positionTrader.getPosition(1);
       
-      // 不存在的持仓应该返回零地址
+      // Non-existent position should return zero address
       expect(owner).to.equal("0x0000000000000000000000000000000000000000");
     });
   });
 
-  describe("访问控制测试", function () {
-    it("未注册用户调用需要注册的函数应该失败", async function () {
+  describe("Access Control Tests", function () {
+    it("unregistered user should fail to call functions requiring registration", async function () {
       await expect(
         positionTrader.connect(signers.alice).revealMyBalance()
       ).to.be.revertedWith("User not registered");
     });
 
-    it("非持仓所有者访问持仓功能应该有适当的保护", async function () {
-      // 这里测试访问控制逻辑，实际的开仓/平仓功能需要更复杂的设置
-      // 目前验证函数存在性
+    it("non-position owner should have appropriate protection for accessing position functions", async function () {
+      // This tests access control logic, actual open/close functions require more complex setup
+      // Currently verifying function existence
       expect(positionTrader.openPosition).to.be.a('function');
       expect(positionTrader.closePosition).to.be.a('function');
     });
   });
 
-  describe("事件验证", function () {
-    it("用户注册应该触发正确的事件", async function () {
+  describe("Event Verification", function () {
+    it("user registration should trigger correct event", async function () {
       await expect(positionTrader.connect(signers.alice).register())
         .to.emit(positionTrader, "UserRegistered")
         .withArgs(signers.alice.address);
     });
 
-    it("余额解密请求应该触发正确的事件", async function () {
-      // 先注册用户
+    it("balance decryption request should trigger correct event", async function () {
+      // Register user first
       await positionTrader.connect(signers.alice).register();
       
       await expect(positionTrader.connect(signers.alice).revealMyBalance())
@@ -291,18 +291,18 @@ describe("PositionTrader 完整测试", function () {
     });
   });
 
-  describe("余额揭示功能", function () {
+  describe("Balance Revelation Function", function () {
     beforeEach(async () => {
-      // 注册用户并进行一些交易以改变余额
+      // Register user and perform some transactions to change balance
       await positionTrader.connect(signers.alice).register();
       await positionTrader.connect(signers.bob).register();
     });
 
-    it("应该能成功请求余额解密", async function () {
+    it("should be able to successfully request balance decryption", async function () {
       const tx = await positionTrader.connect(signers.alice).revealMyBalance();
       const receipt = await tx.wait();
       
-      // 验证DecryptionRequested事件
+      // Verify DecryptionRequested event
       const event = receipt.logs.find((log: any) => 
         log.fragment && log.fragment.name === "DecryptionRequested"
       );
@@ -312,14 +312,14 @@ describe("PositionTrader 完整测试", function () {
       expect(event.args[2]).to.be.a('bigint'); // timestamp
     });
 
-    it("未注册用户不应该能请求余额解密", async function () {
+    it("unregistered user should not be able to request balance decryption", async function () {
       await expect(
         positionTrader.connect(signers.charlie).revealMyBalance()
       ).to.be.revertedWith("User not registered");
     });
 
-    it("应该正确处理解密回调", async function () {
-      // 发起解密请求
+    it("should correctly handle decryption callback", async function () {
+      // Initiate decryption request
       const tx = await positionTrader.connect(signers.alice).revealMyBalance();
       const receipt = await tx.wait();
       
@@ -329,22 +329,22 @@ describe("PositionTrader 完整测试", function () {
       const requestId = requestEvent.args[1];
       const timestamp = requestEvent.args[2];
       
-      // 等待FHEVM解密预言机完成解密
+      // Wait for FHEVM decryption oracle to complete decryption
       await hre.fhevm.awaitDecryptionOracle();
       
-      // 验证解密记录已更新
+      // Verify decryption record updated
       const [amount, recordTimestamp] = await positionTrader.getLatestBalanceReveal(signers.alice.address);
-      expect(amount).to.equal(1000); // 初始余额
+      expect(amount).to.equal(1000); // Initial balance
       expect(recordTimestamp).to.equal(timestamp);
     });
 
-    it("应该正确获取最新的余额解密记录", async function () {
-      // 初始时应该没有解密记录
+    it("should correctly get the latest balance decryption record", async function () {
+      // Should have no decryption records initially
       const [initialAmount, initialTimestamp] = await positionTrader.getLatestBalanceReveal(signers.alice.address);
       expect(initialAmount).to.equal(0);
       expect(initialTimestamp).to.equal(0);
       
-      // 发起解密请求
+      // Initiate decryption request
       const tx = await positionTrader.connect(signers.alice).revealMyBalance();
       const receipt = await tx.wait();
       const requestEvent = receipt.logs.find((log: any) => 
@@ -353,23 +353,23 @@ describe("PositionTrader 完整测试", function () {
       const requestId = requestEvent.args[1];
       const timestamp = requestEvent.args[2];
       
-      // 等待FHEVM解密预言机完成解密
+      // Wait for FHEVM decryption oracle to complete decryption
       await hre.fhevm.awaitDecryptionOracle();
       
-      // 验证解密记录已更新
+      // Verify decryption record updated
       const [amount, recordTimestamp] = await positionTrader.getLatestBalanceReveal(signers.alice.address);
-      expect(amount).to.equal(1000); // 初始余额
+      expect(amount).to.equal(1000); // Initial balance
       expect(recordTimestamp).to.equal(timestamp);
     });
 
-    it("未注册用户不应该能查询解密记录", async function () {
+    it("unregistered user should not be able to query decryption records", async function () {
       await expect(
         positionTrader.getLatestBalanceReveal(signers.charlie.address)
       ).to.be.revertedWith("User not registered");
     });
 
-    it("应该支持多次解密请求和记录更新", async function () {
-      // 第一次解密请求
+    it("should support multiple decryption requests and record updates", async function () {
+      // First decryption request
       let tx = await positionTrader.connect(signers.alice).revealMyBalance();
       let receipt = await tx.wait();
       let requestEvent = receipt.logs.find((log: any) => 
@@ -378,18 +378,18 @@ describe("PositionTrader 完整测试", function () {
       let requestId = requestEvent.args[1];
       let timestamp1 = requestEvent.args[2];
       
-      // 等待第一次解密完成
+      // Wait for first decryption to complete
       await hre.fhevm.awaitDecryptionOracle();
       
-      // 验证第一次记录
+      // Verify first record
       let [amount, recordTimestamp] = await positionTrader.getLatestBalanceReveal(signers.alice.address);
       expect(amount).to.equal(1000);
       expect(recordTimestamp).to.equal(timestamp1);
       
-      // 等待一下以确保时间戳不同
+      // Wait a bit to ensure different timestamps
       await new Promise(resolve => setTimeout(resolve, 1000));
       
-      // 模拟一笔交易改变余额（开仓）
+      // Simulate a transaction to change balance (open position)
       const encryptedInput = await fhevm
         .createEncryptedInput(positionTraderAddress, signers.alice.address)
         .addBool(true)
@@ -402,7 +402,7 @@ describe("PositionTrader 完整测试", function () {
         encryptedInput.inputProof
       );
       
-      // 第二次解密请求
+      // Second decryption request
       tx = await positionTrader.connect(signers.alice).revealMyBalance();
       receipt = await tx.wait();
       requestEvent = receipt.logs.find((log: any) => 
@@ -411,18 +411,18 @@ describe("PositionTrader 完整测试", function () {
       requestId = requestEvent.args[1];
       let timestamp2 = requestEvent.args[2];
       
-      // 等待第二次解密完成
+      // Wait for second decryption to complete
       await hre.fhevm.awaitDecryptionOracle();
       
-      // 验证记录已更新为最新的（开仓后余额应该是950）
+      // Verify record updated to latest (balance should be 950 after opening)
       [amount, recordTimestamp] = await positionTrader.getLatestBalanceReveal(signers.alice.address);
       expect(amount).to.equal(950);
       expect(recordTimestamp).to.equal(timestamp2);
       expect(timestamp2).to.be.greaterThan(timestamp1);
     });
 
-    it("应该在交易后能正确解密更新的余额", async function () {
-      // 先进行一笔交易改变余额
+    it("should correctly decrypt updated balance after a transaction", async function () {
+      // First perform a transaction to change balance
       const encryptedInput = await fhevm
         .createEncryptedInput(positionTraderAddress, signers.alice.address)
         .addBool(true)
@@ -435,7 +435,7 @@ describe("PositionTrader 完整测试", function () {
         encryptedInput.inputProof
       );
       
-      // 请求解密交易后的余额
+      // Request decryption of balance after the transaction
       const tx = await positionTrader.connect(signers.alice).revealMyBalance();
       const receipt = await tx.wait();
       const requestEvent = receipt.logs.find((log: any) => 
@@ -443,16 +443,16 @@ describe("PositionTrader 完整测试", function () {
       );
       const requestId = requestEvent.args[1];
       
-      // 等待FHEVM解密预言机完成解密
+      // Wait for FHEVM decryption oracle to complete decryption
       await hre.fhevm.awaitDecryptionOracle();
       
-      // 验证解密的余额正确（开仓后应该是900）
+      // Verify decrypted balance is correct (should be 900 after opening)
       const [amount] = await positionTrader.getLatestBalanceReveal(signers.alice.address);
       expect(amount).to.equal(900);
     });
 
-    it("应该支持多用户独立的解密记录", async function () {
-      // Alice的解密请求
+    it("should support multiple independent decryption records for different users", async function () {
+      // Alice's decryption request
       let tx = await positionTrader.connect(signers.alice).revealMyBalance();
       let receipt = await tx.wait();
       let requestEvent = receipt.logs.find((log: any) => 
@@ -460,7 +460,7 @@ describe("PositionTrader 完整测试", function () {
       );
       let aliceRequestId = requestEvent.args[1];
       
-      // Bob的解密请求
+      // Bob's decryption request
       tx = await positionTrader.connect(signers.bob).revealMyBalance();
       receipt = await tx.wait();
       requestEvent = receipt.logs.find((log: any) => 
@@ -468,10 +468,10 @@ describe("PositionTrader 完整测试", function () {
       );
       let bobRequestId = requestEvent.args[1];
       
-      // 等待FHEVM解密预言机完成所有解密请求
+      // Wait for FHEVM decryption oracle to complete all decryption requests
       await hre.fhevm.awaitDecryptionOracle();
       
-      // 验证各自的记录
+      // Verify respective records
       const [aliceAmount] = await positionTrader.getLatestBalanceReveal(signers.alice.address);
       const [bobAmount] = await positionTrader.getLatestBalanceReveal(signers.bob.address);
       
@@ -480,8 +480,8 @@ describe("PositionTrader 完整测试", function () {
     });
   });
 
-  describe("管理员功能", function () {
-    it("合约所有者应该能更新价格预言机地址", async function () {
+  describe("Admin Functions", function () {
+    it("contract owner should be able to update price oracle address", async function () {
       const newOracleAddress = "0x1234567890123456789012345678901234567890";
       
       await expect(
@@ -492,7 +492,7 @@ describe("PositionTrader 完整测试", function () {
       expect(await positionTrader.priceOracleAddress()).to.equal(newOracleAddress);
     });
 
-    it("非所有者不应该能更新价格预言机地址", async function () {
+    it("non-owner should not be able to update price oracle address", async function () {
       const newOracleAddress = "0x1234567890123456789012345678901234567890";
       
       await expect(
@@ -500,30 +500,30 @@ describe("PositionTrader 完整测试", function () {
       ).to.be.revertedWithCustomError(positionTrader, "OwnableUnauthorizedAccount");
     });
 
-    it("不应该允许设置零地址作为价格预言机", async function () {
+    it("should not allow setting zero address as price oracle", async function () {
       await expect(
         positionTrader.connect(signers.deployer).updatePriceOracle("0x0000000000000000000000000000000000000000")
       ).to.be.revertedWith("Invalid zero address");
     });
   });
 
-  describe("常量和配置验证", function () {
-    it("应该有正确的常量值", async function () {
+  describe("Constant and Configuration Verification", function () {
+    it("should have correct constant values", async function () {
       expect(await positionTrader.CONTRACT_USD_VALUE()).to.equal(1);
       expect(await positionTrader.BTC_PRECISION()).to.equal(100000000); // 1e8
       expect(await positionTrader.CALCULATION_PRECISION()).to.equal(100000000); // 1e8
     });
   });
 
-  describe("开仓功能测试", function () {
+  describe("Open Position Function Test", function () {
     beforeEach(async () => {
-      // 注册用户
+      // Register user
       const tx = await positionTrader.connect(signers.alice).register();
       await tx.wait();
     });
 
-    it("应该能成功开多头仓位并验证余额变化", async function () {
-      // 获取初始余额
+    it("should be able to successfully open long position and verify balance change", async function () {
+      // Get initial balance
       const initialEncryptedBalance = await positionTrader.getBalance(signers.alice.address);
       const initialClearBalance = await fhevm.userDecryptEuint(
         FhevmType.euint64,
@@ -533,7 +533,7 @@ describe("PositionTrader 完整测试", function () {
       );
       expect(initialClearBalance).to.equal(1000);
       
-      // 准备加密输入
+      // Prepare encrypted input
       const contractCount = 100; // 100 USD
       const isLong = true;
       
@@ -543,7 +543,7 @@ describe("PositionTrader 完整测试", function () {
         .add64(contractCount)
         .encrypt();
       
-      // 开仓
+      // Open position
       const tx = await positionTrader.connect(signers.alice).openPosition(
         encryptedInput.handles[0], // isLong
         encryptedInput.handles[1], // usdAmount
@@ -551,15 +551,15 @@ describe("PositionTrader 完整测试", function () {
       );
       const receipt = await tx.wait();
       
-      // 验证事件
+      // Verify event
       const event = receipt.logs.find((log: any) => 
         log.fragment && log.fragment.name === "PositionOpened"
       );
       expect(event).to.not.be.undefined;
       expect(event.args[0]).to.equal(signers.alice.address);
-      expect(event.args[2]).to.equal(50000); // 当前价格
+      expect(event.args[2]).to.equal(50000); // Current price
       
-      // 验证余额减少
+      // Verify balance decrease
       const afterEncryptedBalance = await positionTrader.getBalance(signers.alice.address);
       const afterClearBalance = await fhevm.userDecryptEuint(
         FhevmType.euint64,
@@ -570,7 +570,7 @@ describe("PositionTrader 完整测试", function () {
       
       expect(afterClearBalance).to.equal(initialClearBalance - BigInt(contractCount));
       
-      // 验证持仓信息
+      // Verify position information
       const positions = await positionTrader.getUserPositionIds(signers.alice.address);
       expect(positions.length).to.equal(1);
       
@@ -580,7 +580,7 @@ describe("PositionTrader 完整测试", function () {
       expect(owner).to.equal(signers.alice.address);
       expect(entryPrice).to.equal(50000);
       
-      // 解密持仓数据
+      // Decrypt position data
       const clearContractCount = await fhevm.userDecryptEuint(
         FhevmType.euint64,
         encryptedContractCount,
@@ -597,7 +597,7 @@ describe("PositionTrader 完整测试", function () {
       expect(clearIsLong).to.be.true;
     });
 
-    it("应该能成功开空头仓位并验证数据准确性", async function () {
+    it("should be able to successfully open short position and verify data accuracy", async function () {
       const contractCount = 200; // 200 USD
       const isLong = false;
       
@@ -617,7 +617,7 @@ describe("PositionTrader 完整测试", function () {
       const positions = await positionTrader.getUserPositionIds(signers.alice.address);
       expect(positions.length).to.equal(1);
       
-      // 验证空头仓位
+      // Verify short position
       const [, , , , encryptedIsLong] = await positionTrader.getPosition(positions[0]);
       const clearIsLong = await fhevm.userDecryptEbool(
         encryptedIsLong,
@@ -627,8 +627,8 @@ describe("PositionTrader 完整测试", function () {
       expect(clearIsLong).to.be.false;
     });
 
-    it("应该能在不同价格下开仓并验证BTC持仓大小", async function () {
-      // 第一次开仓 - 价格 $50,000
+    it("should be able to open positions at different prices and verify BTC position size", async function () {
+      // First open position - price $50,000
       const amount1 = 100;
       let encryptedInput = await fhevm
         .createEncryptedInput(positionTraderAddress, signers.alice.address)
@@ -642,10 +642,10 @@ describe("PositionTrader 完整测试", function () {
         encryptedInput.inputProof
       );
       
-      // 改变价格到 $60,000
+      // Change price to $60,000
       await priceOracle.setManualPrice(60000);
       
-      // 第二次开仓 - 价格 $60,000
+      // Second open position - price $60,000
       const amount2 = 120;
       encryptedInput = await fhevm
         .createEncryptedInput(positionTraderAddress, signers.alice.address)
@@ -660,17 +660,17 @@ describe("PositionTrader 完整测试", function () {
       );
       const receipt = await tx.wait();
       
-      // 验证第二次开仓的价格
+      // Verify second open position price
       const event = receipt.logs.find((log: any) => 
         log.fragment && log.fragment.name === "PositionOpened"
       );
       expect(event.args[2]).to.equal(60000);
       
-      // 验证用户有两个持仓
+      // Verify user has two positions
       const positions = await positionTrader.getUserPositionIds(signers.alice.address);
       expect(positions.length).to.equal(2);
       
-      // 验证BTC持仓大小计算正确
+      // Verify BTC position size calculation is correct
       const [, , encryptedBtcSize1] = await positionTrader.getPosition(positions[0]);
       const [, , encryptedBtcSize2] = await positionTrader.getPosition(positions[1]);
       
@@ -688,15 +688,15 @@ describe("PositionTrader 完整测试", function () {
         signers.alice
       );
       
-      // 第一个仓位: 100 USD / 50000 * 1e8 = 200000 satoshi
+      // First position: 100 USD / 50000 * 1e8 = 200000 satoshi
       expect(clearBtcSize1).to.equal(200000);
-      // 第二个仓位: 120 USD / 60000 * 1e8 = 200000 satoshi
+      // Second position: 120 USD / 60000 * 1e8 = 200000 satoshi
       expect(clearBtcSize2).to.equal(200000);
     });
 
-    it("资金不足时开仓应该正确处理", async function () {
-      // 尝试开超大仓位
-      const largeContractCount = 1500; // 超过初始资金1000
+    it("should correctly handle insufficient funds for opening position", async function () {
+      // Try to open a very large position
+      const largeContractCount = 1500; // More than initial funds 1000
       
       const encryptedInput = await fhevm
         .createEncryptedInput(positionTraderAddress, signers.alice.address)
@@ -704,7 +704,7 @@ describe("PositionTrader 完整测试", function () {
         .add64(largeContractCount)
         .encrypt();
       
-      // 在FHEVM中，资金不足不会直接revert，而是会将金额设为0
+      // In FHEVM, insufficient funds will not directly revert, but will set the amount to 0
       const tx = await positionTrader.connect(signers.alice).openPosition(
         encryptedInput.handles[0],
         encryptedInput.handles[1],
@@ -712,7 +712,7 @@ describe("PositionTrader 完整测试", function () {
       );
       await tx.wait();
       
-      // 验证余额没有变化（因为实际扣除金额为0）
+      // Verify balance did not change (because actual deducted amount was 0)
       const encryptedBalance = await positionTrader.getBalance(signers.alice.address);
       const clearBalance = await fhevm.userDecryptEuint(
         FhevmType.euint64,
@@ -720,21 +720,21 @@ describe("PositionTrader 完整测试", function () {
         positionTraderAddress,
         signers.alice
       );
-      expect(clearBalance).to.equal(1000); // 余额不变
+      expect(clearBalance).to.equal(1000); // Balance unchanged
     });
   });
 
-  describe("平仓功能测试", function () {
+  describe("Close Position Function Test", function () {
     let positionId: number;
     let initialContractCount: number = 200;
     
     beforeEach(async () => {
-      // 注册用户并开仓
+      // Register user and open position
       await positionTrader.connect(signers.alice).register();
       
       const encryptedInput = await fhevm
         .createEncryptedInput(positionTraderAddress, signers.alice.address)
-        .addBool(true) // 多头
+        .addBool(true) // Long
         .add64(initialContractCount)
         .encrypt();
       
@@ -751,8 +751,8 @@ describe("PositionTrader 完整测试", function () {
       positionId = event.args[1];
     });
 
-    it("应该能成功平仓并验证余额变化", async function () {
-      // 获取平仓前余额
+    it("should be able to successfully close position and verify balance change", async function () {
+      // Get balance before closing
       const beforeEncryptedBalance = await positionTrader.getBalance(signers.alice.address);
       const beforeClearBalance = await fhevm.userDecryptEuint(
         FhevmType.euint64,
@@ -761,7 +761,7 @@ describe("PositionTrader 完整测试", function () {
         signers.alice
       );
       
-      // 全部平仓
+      // Close all
       const closeAmount = initialContractCount;
       const encryptedInput = await fhevm
         .createEncryptedInput(positionTraderAddress, signers.alice.address)
@@ -775,16 +775,16 @@ describe("PositionTrader 完整测试", function () {
       );
       const receipt = await tx.wait();
       
-      // 验证平仓事件
+      // Verify close event
       const event = receipt.logs.find((log: any) => 
         log.fragment && log.fragment.name === "PositionClosed"
       );
       expect(event).to.not.be.undefined;
       expect(event.args[0]).to.equal(signers.alice.address);
       expect(event.args[1]).to.equal(positionId);
-      expect(event.args[2]).to.equal(50000); // 平仓价格
+      expect(event.args[2]).to.equal(50000); // Close price
       
-      // 验证余额恢复（价格未变，应该恢复到初始状态）
+      // Verify balance recovery (price unchanged, should recover to initial state)
       const afterEncryptedBalance = await positionTrader.getBalance(signers.alice.address);
       const afterClearBalance = await fhevm.userDecryptEuint(
         FhevmType.euint64,
@@ -793,12 +793,12 @@ describe("PositionTrader 完整测试", function () {
         signers.alice
       );
       
-      // 由于价格未变，平仓后余额应该恢复到开仓前的水平
+      // Since price unchanged, balance after closing should recover to pre-opening level
       expect(afterClearBalance).to.be.greaterThan(beforeClearBalance);
     });
 
-    it("应该能在价格上涨后盈利平仓多头并验证盈利", async function () {
-      // 获取平仓前余额
+    it("should be able to profitably close long position after price increase and verify profit", async function () {
+      // Get balance before closing
       const beforeEncryptedBalance = await positionTrader.getBalance(signers.alice.address);
       const beforeClearBalance = await fhevm.userDecryptEuint(
         FhevmType.euint64,
@@ -807,7 +807,7 @@ describe("PositionTrader 完整测试", function () {
         signers.alice
       );
       
-      // 价格上涨到 $55,000 (+10%)
+      // Price increases to $55,000 (+10%)
       await priceOracle.setManualPrice(55000);
       
       const closeAmount = initialContractCount;
@@ -826,9 +826,9 @@ describe("PositionTrader 完整测试", function () {
       const event = receipt.logs.find((log: any) => 
         log.fragment && log.fragment.name === "PositionClosed"
       );
-      expect(event.args[2]).to.equal(55000); // 平仓价格
+      expect(event.args[2]).to.equal(55000); // Close price
       
-      // 验证盈利：价格上涨10%，多头应该盈利
+      // Verify profit: price increased by 10%, long position should profit
       const afterEncryptedBalance = await positionTrader.getBalance(signers.alice.address);
       const afterClearBalance = await fhevm.userDecryptEuint(
         FhevmType.euint64,
@@ -837,13 +837,13 @@ describe("PositionTrader 完整测试", function () {
         signers.alice
       );
       
-      // 盈利应该约为: 200 * 1.1 = 220, 总余额应该约为 800 + 220 = 1020
+      // Profit should be approximately: 200 * 1.1 = 220, total balance should be approximately 800 + 220 = 1020
       expect(afterClearBalance).to.be.greaterThan(1000);
       expect(afterClearBalance).to.be.greaterThan(beforeClearBalance + BigInt(initialContractCount));
     });
 
-    it("应该能在价格下跌后亏损平仓多头并验证亏损", async function () {
-      // 获取平仓前余额
+    it("should be able to incur loss when closing long position after price decrease and verify loss", async function () {
+      // Get balance before closing
       const beforeEncryptedBalance = await positionTrader.getBalance(signers.alice.address);
       const beforeClearBalance = await fhevm.userDecryptEuint(
         FhevmType.euint64,
@@ -852,7 +852,7 @@ describe("PositionTrader 完整测试", function () {
         signers.alice
       );
       
-      // 价格下跌到 $45,000 (-10%)
+      // Price decreases to $45,000 (-10%)
       await priceOracle.setManualPrice(45000);
       
       const closeAmount = initialContractCount;
@@ -871,9 +871,9 @@ describe("PositionTrader 完整测试", function () {
       const event = receipt.logs.find((log: any) => 
         log.fragment && log.fragment.name === "PositionClosed"
       );
-      expect(event.args[2]).to.equal(45000); // 平仓价格
+      expect(event.args[2]).to.equal(45000); // Close price
       
-      // 验证亏损：价格下跌10%，多头应该亏损
+      // Verify loss: price decreased by 10%, long position should incur loss
       const afterEncryptedBalance = await positionTrader.getBalance(signers.alice.address);
       const afterClearBalance = await fhevm.userDecryptEuint(
         FhevmType.euint64,
@@ -882,12 +882,12 @@ describe("PositionTrader 完整测试", function () {
         signers.alice
       );
       
-      // 亏损应该约为: 200 * 0.9 = 180, 总余额应该约为 800 + 180 = 980
+      // Loss should be approximately: 200 * 0.9 = 180, total balance should be approximately 800 + 180 = 980
       expect(afterClearBalance).to.be.lessThan(1000);
       expect(afterClearBalance).to.be.lessThan(beforeClearBalance + BigInt(initialContractCount));
     });
 
-    it("非持仓所有者不应该能平仓", async function () {
+    it("non-position owner should not be able to close position", async function () {
       const closeAmount = 50;
       const encryptedInput = await fhevm
         .createEncryptedInput(positionTraderAddress, signers.bob.address)
@@ -903,7 +903,7 @@ describe("PositionTrader 完整测试", function () {
       ).to.be.revertedWith("Not position owner");
     });
 
-    it("不存在的持仓ID应该平仓失败", async function () {
+    it("non-existent position ID should fail to close", async function () {
       const nonExistentId = 9999;
       const closeAmount = 50;
       const encryptedInput = await fhevm
@@ -920,8 +920,8 @@ describe("PositionTrader 完整测试", function () {
       ).to.be.revertedWith("Not position owner");
     });
 
-    it("应该支持部分平仓并验证余下持仓", async function () {
-      // 部分平仓（平掉一半）
+    it("should support partial closing and verify remaining positions", async function () {
+      // Partial closing (close half)
       const partialCloseAmount = initialContractCount / 2;
       const encryptedInput = await fhevm
         .createEncryptedInput(positionTraderAddress, signers.alice.address)
@@ -935,7 +935,7 @@ describe("PositionTrader 完整测试", function () {
       );
       await tx.wait();
       
-      // 验证余下持仓
+      // Verify remaining positions
       const [, encryptedContractCount] = await positionTrader.getPosition(positionId);
       const clearContractCount = await fhevm.userDecryptEuint(
         FhevmType.euint64,
@@ -944,21 +944,21 @@ describe("PositionTrader 完整测试", function () {
         signers.alice
       );
       
-      // 应该还剩一半持仓
+      // Should have half remaining positions
       expect(clearContractCount).to.equal(BigInt(initialContractCount - partialCloseAmount));
     });
   });
 
-  describe("复杂交易场景测试", function () {
+  describe("Complex Transaction Scenario Test", function () {
     beforeEach(async () => {
-      // 注册多个用户
+      // Register multiple users
       await positionTrader.connect(signers.alice).register();
       await positionTrader.connect(signers.bob).register();
       await positionTrader.connect(signers.charlie).register();
     });
 
-    it("应该支持多用户同时交易", async function () {
-      // Alice 开多头
+    it("should support multiple users trading simultaneously", async function () {
+      // Alice opens long position
       let encryptedInput = await fhevm
         .createEncryptedInput(positionTraderAddress, signers.alice.address)
         .addBool(true)
@@ -970,7 +970,7 @@ describe("PositionTrader 完整测试", function () {
         encryptedInput.inputProof
       );
       
-      // Bob 开空头
+      // Bob opens short position
       encryptedInput = await fhevm
         .createEncryptedInput(positionTraderAddress, signers.bob.address)
         .addBool(false)
@@ -982,7 +982,7 @@ describe("PositionTrader 完整测试", function () {
         encryptedInput.inputProof
       );
       
-      // Charlie 开多头
+      // Charlie opens long position
       encryptedInput = await fhevm
         .createEncryptedInput(positionTraderAddress, signers.charlie.address)
         .addBool(true)
@@ -994,14 +994,14 @@ describe("PositionTrader 完整测试", function () {
         encryptedInput.inputProof
       );
       
-      // 验证各用户持仓
+      // Verify positions of each user
       expect((await positionTrader.getUserPositionIds(signers.alice.address)).length).to.equal(1);
       expect((await positionTrader.getUserPositionIds(signers.bob.address)).length).to.equal(1);
       expect((await positionTrader.getUserPositionIds(signers.charlie.address)).length).to.equal(1);
     });
 
-    it("应该正确处理价格剧烈波动下的交易", async function () {
-      // 获取Alice和Bob的初始余额
+    it("should correctly handle transactions under extreme price volatility", async function () {
+      // Get initial balances of Alice and Bob
       const aliceInitialBalance = await fhevm.userDecryptEuint(
         FhevmType.euint64,
         await positionTrader.getBalance(signers.alice.address),
@@ -1017,7 +1017,7 @@ describe("PositionTrader 完整测试", function () {
       expect(aliceInitialBalance).to.equal(1000);
       expect(bobInitialBalance).to.equal(1000);
 
-      // Alice 在 $50,000 开多头，投入20 USD
+      // Alice opens long position at $50,000, invests 20 USD
       let encryptedInput = await fhevm
         .createEncryptedInput(positionTraderAddress, signers.alice.address)
         .addBool(true)
@@ -1033,7 +1033,7 @@ describe("PositionTrader 完整测试", function () {
         log.fragment && log.fragment.name === "PositionOpened"
       ).args[1];
 
-      // 验证Alice开仓后余额
+      // Verify Alice's balance after opening position
       const aliceAfterOpenBalance = await fhevm.userDecryptEuint(
         FhevmType.euint64,
         await positionTrader.getBalance(signers.alice.address),
@@ -1042,10 +1042,10 @@ describe("PositionTrader 完整测试", function () {
       );
       expect(aliceAfterOpenBalance).to.equal(BigInt(1000 - 20)); // 1000 - 20 = 980
       
-      // 价格暴跌到 $30,000
+      // Price crashes to $30,000
       await priceOracle.setManualPrice(30000);
       
-      // Bob 在低价开多头，投入25 USD
+      // Bob opens long position at low price, invests 25 USD
       encryptedInput = await fhevm
         .createEncryptedInput(positionTraderAddress, signers.bob.address)
         .addBool(true)
@@ -1061,7 +1061,7 @@ describe("PositionTrader 完整测试", function () {
         log.fragment && log.fragment.name === "PositionOpened"
       ).args[1];
 
-      // 验证Bob开仓后余额
+      // Verify Bob's balance after opening position
       const bobAfterOpenBalance = await fhevm.userDecryptEuint(
         FhevmType.euint64,
         await positionTrader.getBalance(signers.bob.address),
@@ -1070,11 +1070,11 @@ describe("PositionTrader 完整测试", function () {
       );
       expect(bobAfterOpenBalance).to.equal(BigInt(1000 - 25)); // 1000 - 25 = 975
       
-      // 价格反弹到 $55,000
+      // Price rebounds to $55,000
       await priceOracle.setManualPrice(55000);
       
-      // Alice 盈利平仓（从50k到55k）
-      // 预期盈利：20 USD * (55000/50000) = 22 USD
+      // Alice profits from closing (from 50k to 55k)
+      // Expected profit: 20 USD * (55000/50000) = 22 USD
       let closeEncryptedInput = await fhevm
         .createEncryptedInput(positionTraderAddress, signers.alice.address)
         .add64(20)
@@ -1085,18 +1085,18 @@ describe("PositionTrader 完整测试", function () {
         closeEncryptedInput.inputProof
       );
 
-      // 验证Alice平仓后余额
+      // Verify Alice's balance after closing
       const aliceAfterCloseBalance = await fhevm.userDecryptEuint(
         FhevmType.euint64,
         await positionTrader.getBalance(signers.alice.address),
         positionTraderAddress,
         signers.alice
       );
-      // Alice应该盈利：20 * 55000/50000 = 22，所以余额应该是 980 + 22 = 1002
+      // Alice should profit: 20 * 55000/50000 = 22, so balance should be 980 + 22 = 1002
       expect(aliceAfterCloseBalance).to.equal(BigInt(1002));
       
-      // Bob 大幅盈利平仓（从30k到55k）
-      // 预期盈利：25 USD * (55000/30000) ≈ 45.83 USD
+      // Bob profits significantly from closing (from 30k to 55k)
+      // Expected profit: 25 USD * (55000/30000) ≈ 45.83 USD
       closeEncryptedInput = await fhevm
         .createEncryptedInput(positionTraderAddress, signers.bob.address)
         .add64(25)
@@ -1107,28 +1107,28 @@ describe("PositionTrader 完整测试", function () {
         closeEncryptedInput.inputProof
       );
 
-      // 验证Bob平仓后余额
+      // Verify Bob's balance after closing
       const bobAfterCloseBalance = await fhevm.userDecryptEuint(
         FhevmType.euint64,
         await positionTrader.getBalance(signers.bob.address),
         positionTraderAddress,
         signers.bob
       );
-      // Bob应该盈利：25 * 55000/30000 ≈ 45.83，但由于整数运算可能有舍入
-      // 预期余额：975 + 45.83 ≈ 1020-1021之间
+      // Bob should profit: 25 * 55000/30000 ≈ 45.83, but integer arithmetic may have rounding
+      // Expected balance: 975 + 45.83 ≈ 1020-1021
       expect(bobAfterCloseBalance).to.be.greaterThan(BigInt(1015));
       expect(bobAfterCloseBalance).to.be.lessThan(BigInt(1025));
       
-      // 验证交易完成 - 在FHE环境中，持仓记录不会被删除以保持机密性
-      // 持仓ID仍然存在，但合约数量已为0（密文）
+      // Verify transaction completed - in FHE environment, position records are not deleted to maintain confidentiality
+      // Position ID still exists, but contract count is 0 (encrypted)
       expect((await positionTrader.getUserPositionIds(signers.alice.address)).length).to.equal(1);
       expect((await positionTrader.getUserPositionIds(signers.bob.address)).length).to.equal(1);
     });
 
-    it("应该支持同一用户多次开平仓操作", async function () {
+    it("should support multiple open/close operations for the same user", async function () {
       const positions = [];
       
-      // 获取初始余额
+      // Get initial balance
       const initialBalance = await fhevm.userDecryptEuint(
         FhevmType.euint64,
         await positionTrader.getBalance(signers.alice.address),
@@ -1137,9 +1137,9 @@ describe("PositionTrader 完整测试", function () {
       );
       expect(initialBalance).to.equal(1000);
       
-      // 连续开仓
+      // Continuous open positions
       for (let i = 0; i < 3; i++) {
-        const price = 50000 + i * 5000; // 价格递增：50000, 55000, 60000
+        const price = 50000 + i * 5000; // Price increases: 50000, 55000, 60000
         await priceOracle.setManualPrice(price);
         
         const encryptedInput = await fhevm
@@ -1159,7 +1159,7 @@ describe("PositionTrader 完整测试", function () {
         positions.push(positionId);
       }
       
-      // 验证开仓后余额：1000 - 15 = 985
+      // Verify balance after opening positions: 1000 - 15 = 985
       const afterOpenBalance = await fhevm.userDecryptEuint(
         FhevmType.euint64,
         await positionTrader.getBalance(signers.alice.address),
@@ -1168,44 +1168,44 @@ describe("PositionTrader 完整测试", function () {
       );
       expect(afterOpenBalance).to.equal(BigInt(1000 - 15)); // 1000 - (3 * 5) = 985
       
-      // 验证有3个持仓
+      // Verify 3 positions
       expect((await positionTrader.getUserPositionIds(signers.alice.address)).length).to.equal(3);
       
-      // 在当前价格（60000）平仓第二个持仓（入场价55000）
-      // 预期盈利：5 USD * (60000/55000) ≈ 5.45 USD
+      // Close the second position (entry price 55000) at current price (60000)
+      // Expected profit: 5 USD * (60000/55000) ≈ 5.45 USD
       const closeEncryptedInput = await fhevm
         .createEncryptedInput(positionTraderAddress, signers.alice.address)
         .add64(5)
         .encrypt();
       await positionTrader.connect(signers.alice).closePosition(
-        positions[1], // 第二个持仓（55000入场价）
+        positions[1], // Second position (55000 entry price)
         closeEncryptedInput.handles[0],
         closeEncryptedInput.inputProof
       );
       
-      // 验证平仓后余额
+      // Verify balance after closing
       const afterCloseBalance = await fhevm.userDecryptEuint(
         FhevmType.euint64,
         await positionTrader.getBalance(signers.alice.address),
         positionTraderAddress,
         signers.alice
       );
-      // 预期余额：985 + (5 * 60000/55000) ≈ 985 + 5.45 ≈ 990-991
+      // Expected balance: 985 + (5 * 60000/55000) ≈ 985 + 5.45 ≈ 990-991
       expect(afterCloseBalance).to.be.greaterThan(BigInt(989));
       expect(afterCloseBalance).to.be.lessThan(BigInt(992));
       
-      // 验证持仓数量不变 - 在FHE环境中，即使部分平仓，持仓记录也不会被删除
-      // 所有3个持仓ID仍然存在，但positions[1]的合约数量已减少（密文）
+      // Verify position count unchanged - in FHE environment, even partial closing, position records are not deleted
+      // All 3 position IDs still exist, but positions[1]'s contract count is reduced (encrypted)
       expect((await positionTrader.getUserPositionIds(signers.alice.address)).length).to.equal(3);
     });
   });
 
-  describe("价格敏感性测试", function () {
+  describe("Price Sensitivity Test", function () {
     beforeEach(async () => {
       await positionTrader.connect(signers.alice).register();
     });
 
-    it("应该在不同价格水平下正确开仓", async function () {
+    it("should correctly open positions at different price levels", async function () {
       const testPrices = [10000, 30000, 50000, 80000, 100000];
       const positions = [];
       
@@ -1234,8 +1234,8 @@ describe("PositionTrader 完整测试", function () {
       expect(positions.length).to.equal(testPrices.length);
     });
 
-    it("应该正确处理极端价格变化", async function () {
-      // 获取初始余额
+    it("should correctly handle extreme price changes", async function () {
+      // Get initial balance
       const initialBalance = await fhevm.userDecryptEuint(
         FhevmType.euint64,
         await positionTrader.getBalance(signers.alice.address),
@@ -1244,7 +1244,7 @@ describe("PositionTrader 完整测试", function () {
       );
       expect(initialBalance).to.equal(1000);
 
-      // 在正常价格开仓
+      // Open position at normal price
       await priceOracle.setManualPrice(50000);
       const encryptedInput = await fhevm
         .createEncryptedInput(positionTraderAddress, signers.alice.address)
@@ -1261,7 +1261,7 @@ describe("PositionTrader 完整测试", function () {
         log.fragment && log.fragment.name === "PositionOpened"
       ).args[1];
 
-      // 验证开仓后余额
+      // Verify balance after opening
       const afterOpenBalance = await fhevm.userDecryptEuint(
         FhevmType.euint64,
         await positionTrader.getBalance(signers.alice.address),
@@ -1270,10 +1270,10 @@ describe("PositionTrader 完整测试", function () {
       );
       expect(afterOpenBalance).to.equal(BigInt(1000 - 10)); // 1000 - 10 = 990
       
-      // 极端价格变化 - 价格腰斩
+      // Extreme price change - price halved
       await priceOracle.setManualPrice(25000);
       
-      // 应该能在极端价格下平仓
+      // Should be able to close at extreme price
       const closeEncryptedInput = await fhevm
         .createEncryptedInput(positionTraderAddress, signers.alice.address)
         .add64(10)
@@ -1290,21 +1290,21 @@ describe("PositionTrader 完整测试", function () {
       );
       expect(closeEvent.args[2]).to.equal(25000);
 
-      // 验证平仓后余额（价格腰斩，多头亏损50%）
+      // Verify balance after closing (price halved, long position incurs 50% loss)
       const afterCloseBalance = await fhevm.userDecryptEuint(
         FhevmType.euint64,
         await positionTrader.getBalance(signers.alice.address),
         positionTraderAddress,
         signers.alice
       );
-      // 预期亏损：10 * (25000/50000) = 5，余额应该是：990 + 5 = 995
+      // Expected loss: 10 * (25000/50000) = 5, balance should be: 990 + 5 = 995
       expect(afterCloseBalance).to.equal(BigInt(995));
     });
 
-    it("应该支持快速价格变化下的连续交易", async function () {
+    it("should support continuous trading under rapid price changes", async function () {
       const priceSequence = [50000, 60000, 45000, 70000, 40000];
       
-      // 获取初始余额
+      // Get initial balance
       const initialBalance = await fhevm.userDecryptEuint(
         FhevmType.euint64,
         await positionTrader.getBalance(signers.alice.address),
@@ -1316,7 +1316,7 @@ describe("PositionTrader 完整测试", function () {
       for (let i = 0; i < priceSequence.length; i++) {
         await priceOracle.setManualPrice(priceSequence[i]);
         
-        // 开仓
+        // Open position
         const encryptedInput = await fhevm
           .createEncryptedInput(positionTraderAddress, signers.alice.address)
           .addBool(i % 2 === 0)
@@ -1332,7 +1332,7 @@ describe("PositionTrader 完整测试", function () {
           log.fragment && log.fragment.name === "PositionOpened"
         ).args[1];
         
-        // 立即平仓（在同一价格下）
+        // Immediately close (at the same price)
         const closeEncryptedInput = await fhevm
           .createEncryptedInput(positionTraderAddress, signers.alice.address)
           .add64(3)
@@ -1344,19 +1344,19 @@ describe("PositionTrader 完整测试", function () {
         );
       }
       
-      // 验证最终余额 - 由于在相同价格开仓和平仓，余额应该接近初始值
+      // Verify final balance - since opening and closing at the same price, balance should be close to initial value
       const finalBalance = await fhevm.userDecryptEuint(
         FhevmType.euint64,
         await positionTrader.getBalance(signers.alice.address),
         positionTraderAddress,
         signers.alice
       );
-      // 由于在相同价格开平仓，理论上余额应该保持1000，允许小幅偏差
+      // Since opening and closing at the same price, theoretically balance should remain 1000, with slight deviation allowed
       expect(finalBalance).to.be.greaterThan(BigInt(999));
       expect(finalBalance).to.be.lessThan(BigInt(1001));
       
-      // 在FHE环境中，持仓记录不会被删除以保持机密性
-      // 每次开仓都会创建持仓ID，平仓只是将合约数量设为0（密文）
+      // In FHE environment, position records are not deleted to maintain confidentiality
+      // Each open position creates a position ID, closing only sets contract count to 0 (encrypted)
       expect((await positionTrader.getUserPositionIds(signers.alice.address)).length).to.equal(5);
     });
   });

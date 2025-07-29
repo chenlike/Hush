@@ -3,7 +3,7 @@ pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-// Chainlink 价格预言机接口
+// Chainlink Price Oracle Interface
 interface AggregatorV3Interface {
     function decimals() external view returns (uint8);
     function description() external view returns (string memory);
@@ -29,8 +29,8 @@ interface IPriceOracle {
     function getDecimals() external view returns (uint8);
 }
 
-/// @title BTC价格预言机合约
-/// @notice 提供BTC价格信息，支持明文和加密价格，以及测试用的手动设置
+/// @title BTC Price Oracle Contract
+/// @notice Provides BTC price information, supports plain text and encrypted prices, and manual settings for testing
 contract PriceOracle is Ownable, IPriceOracle {
 
     constructor(address aggregatorAddress) Ownable(msg.sender) {
@@ -39,26 +39,26 @@ contract PriceOracle is Ownable, IPriceOracle {
 
     address private _aggregatorAddress;
 
-    // 以下为测试用变量
+    // The following are test variables
     bool public manualMode = false;
     uint256 private _manualPrice = 0;
 
-    /// @notice 设置 Chainlink 聚合器地址
+    /// @notice Set Chainlink aggregator address
     function setAggregatorAddress(address aggregatorAddress) public onlyOwner {
         _aggregatorAddress = aggregatorAddress;
     }
 
-    /// @notice 设置手动价格，仅测试使用
+    /// @notice Set manual price, for testing only
     function setManualPrice(uint256 manualPrice) public onlyOwner {
         _manualPrice = manualPrice;
     }
 
-    /// @notice 启用或关闭手动价格模式，仅测试使用
+    /// @notice Enable or disable manual price mode, for testing only
     function setManualMode(bool enabled) public onlyOwner {
         manualMode = enabled;
     }
 
-    /// @notice 获取最新BTC价格（返回整数，无小数位）
+    /// @notice Get latest BTC price (returns integer, no decimal places)
     function getLatestBtcPrice() public view returns (uint256) {
         if (manualMode) {
             return _manualPrice;
@@ -68,11 +68,11 @@ contract PriceOracle is Ownable, IPriceOracle {
         uint8 decimals = priceFeed.decimals();
         require(price >= 0, "Invalid negative price");
 
-        // 去除小数部分，转换为整数
+        // Remove decimal part, convert to integer
         return uint256(price) / (10 ** decimals);
     }
 
-    /// @notice 获取价格小数位
+    /// @notice Get price decimal places
     function getDecimals() public view returns (uint8) {
         AggregatorV3Interface priceFeed = AggregatorV3Interface(_aggregatorAddress);
         return priceFeed.decimals();

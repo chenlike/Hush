@@ -6,82 +6,82 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   const { deployer } = await hre.getNamedAccounts();
   const { deploy } = hre.deployments;
 
-  console.log("开始部署合约...");
+  console.log("Starting contract deployment...");
 
-  // 1. 首先部署 PriceOracle 合约
-  console.log("部署 PriceOracle 合约...");
+  // 1. First deploy PriceOracle contract
+  console.log("Deploying PriceOracle contract...");
   const PriceOracle = await ethers.getContractFactory("PriceOracle");
   
-  // Sepolia测试网上的BTC/USD价格预言机地址
+  // BTC/USD price oracle address on Sepolia testnet
   const BTC_USD_AGGREGATOR_SEPOLIA = "0x1b44F3514812d835EB1BDB0acB33d3fA3351Ee43";
   
   const priceOracle = await PriceOracle.deploy(BTC_USD_AGGREGATOR_SEPOLIA as any);
   await priceOracle.waitForDeployment();
   const priceOracleAddress = await priceOracle.getAddress();
 
-  console.log(`PriceOracle 合约地址: ${priceOracleAddress}`);
+  console.log(`PriceOracle contract address: ${priceOracleAddress}`);
 
-  // 2. 部署 PositionTrader 合约，传入 PriceOracle 的地址和初始现金
-  console.log("部署 PositionTrader 合约...");
+  // 2. Deploy PositionTrader contract, passing PriceOracle address and initial cash
+  console.log("Deploying PositionTrader contract...");
   const PositionTrader = await ethers.getContractFactory("PositionTrader");
-  const INITIAL_CASH_BASE = 100000; // 用户初始虚拟资产 (USD)
+  const INITIAL_CASH_BASE = 100000; // User initial virtual assets (USD)
   const positionTrader = await PositionTrader.deploy(priceOracleAddress, INITIAL_CASH_BASE);
   await positionTrader.waitForDeployment();
   const positionTraderAddress = await positionTrader.getAddress();
 
-  console.log(`PositionTrader 合约地址: ${positionTraderAddress}`);
-  console.log(`用户初始虚拟资产: ${INITIAL_CASH_BASE} USD`);
+  console.log(`PositionTrader contract address: ${positionTraderAddress}`);
+  console.log(`User initial virtual assets: ${INITIAL_CASH_BASE} USD`);
   
-  console.log("\n所有合约部署完成！");
+  console.log("\nAll contracts deployed successfully!");
   console.log("PriceOracle:", priceOracleAddress);
   console.log("PositionTrader:", positionTraderAddress);
-  console.log("初始虚拟资产:", `${INITIAL_CASH_BASE} USD`);
+  console.log("Initial virtual assets:", `${INITIAL_CASH_BASE} USD`);
 
-  // 3. 等待交易确认和Etherscan同步
-  console.log("\n等待交易确认和Etherscan同步...");
-  console.log("等待30秒...");
+  // 3. Wait for transaction confirmation and Etherscan sync
+  console.log("\nWaiting for transaction confirmation and Etherscan sync...");
+  console.log("Waiting 30 seconds...");
   await new Promise(resolve => setTimeout(resolve, 30000));
 
-  // 4. 验证合约
-  console.log("开始验证合约...");
+  // 4. Verify contracts
+  console.log("Starting contract verification...");
   
   const verifyContract = async (contractName: string, address: string, constructorArguments: any[] = []) => {
     try {
-      console.log(`验证 ${contractName} 合约...`);
+      console.log(`Verifying ${contractName} contract...`);
       await hre.run("verify:verify", {
         address: address,
         constructorArguments: constructorArguments,
       });
-      console.log(`✅ ${contractName} 合约验证成功！`);
+      console.log(`✅ ${contractName} contract verification successful!`);
       return true;
     } catch (error: any) {
       if (error.message.includes("already verified")) {
-        console.log(`✅ ${contractName} 合约已经验证过了！`);
+        console.log(`✅ ${contractName} contract already verified!`);
         return true;
       } else if (error.message.includes("does not have bytecode")) {
-        console.log(`⏳ ${contractName} 合约字节码还未同步到Etherscan，请稍后手动验证`);
-        console.log(`   地址: ${address}`);
+        console.log(`⏳ ${contractName} contract bytecode not yet synced to Etherscan, please verify manually later`);
+        console.log(`   Address: ${address}`);
         return false;
       } else {
-        console.log(`❌ ${contractName} 合约验证失败:`, error.message);
+        console.log(`❌ ${contractName} contract verification failed:`, error.message);
         return false;
       }
     }
   };
 
-  // 验证所有合约
+  // Verify all contracts
   await verifyContract("PriceOracle", priceOracleAddress, [BTC_USD_AGGREGATOR_SEPOLIA]);
   await verifyContract("PositionTrader", positionTraderAddress, [priceOracleAddress, INITIAL_CASH_BASE]);
 
-  console.log("\n🎉 合约部署和验证完成！");
-  console.log("合约地址:");
+  console.log("\n🎉 Contract deployment and verification completed!");
+  console.log("Contract addresses:");
   console.log("PriceOracle:", priceOracleAddress);
   console.log("PositionTrader:", positionTraderAddress);
-  console.log("\n合约配置:");
-  console.log("BTC/USD 价格预言机:", BTC_USD_AGGREGATOR_SEPOLIA);
-  console.log("用户初始虚拟资产:", `${INITIAL_CASH_BASE} USD`);
+  console.log("\nContract configuration:");
+  console.log("BTC/USD Price Oracle:", BTC_USD_AGGREGATOR_SEPOLIA);
+  console.log("User initial virtual assets:", `${INITIAL_CASH_BASE} USD`);
   
-  console.log("\n注意：这些都是普通合约，不可升级。");
+  console.log("\nNote: These are regular contracts, not upgradeable.");
 };
 
 export default func;

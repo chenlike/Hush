@@ -8,22 +8,22 @@ import {IPriceOracle} from "./PriceOracle.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 /**
- * @title FHE 永续合约交易合约
- * @notice 支持 1 倍杠杆的全密态永续合约交易
- * @dev 每张合约面值固定为 1 美元，BTC 头寸精确到 satoshi
+ * @title FHE Perpetual Contract Trading Contract
+ * @notice Supports 1x leverage fully encrypted perpetual contract trading
+ * @dev Each contract has a fixed face value of 1 USD, BTC positions are precise to satoshi
  */
 contract PositionTrader is SepoliaConfig, Ownable {
     // ============================
-    // 常量定义
+    // Constant Definitions
     // ============================
 
-    uint64 public immutable INITIAL_CASH_BASE; // 初始虚拟资产 (USD)
-    uint64 public constant CONTRACT_USD_VALUE = 1; // 每张合约价值 (USD)
-    uint64 public constant BTC_PRECISION = 1e8; // BTC 精度 (satoshi)
-    uint256 public constant CALCULATION_PRECISION = 1e8; // 计算精度
+    uint64 public immutable INITIAL_CASH_BASE; // Initial virtual assets (USD)
+    uint64 public constant CONTRACT_USD_VALUE = 1; // Value per contract (USD)
+    uint64 public constant BTC_PRECISION = 1e8; // BTC precision (satoshi)
+    uint256 public constant CALCULATION_PRECISION = 1e8; // Calculation precision
 
     // ============================
-    // 状态变量
+    // State Variables
     // ============================
 
     address public priceOracleAddress;
@@ -31,34 +31,34 @@ contract PositionTrader is SepoliaConfig, Ownable {
     uint256 private _positionCounter;
 
     // ============================
-    // 数据结构
+    // Data Structures
     // ============================
 
     struct Position {
-        address owner; // 持仓所有者
-        euint64 contractCount; // 合约张数
-        euint64 btcSize; // BTC 持仓大小 (satoshi)
-        uint64 entryPrice; // 开仓价格 (USD/BTC)
-        ebool isLong; // 多头/空头标识
-        uint256 openTimestamp; // 开仓时间戳
+        address owner; // Position owner
+        euint64 contractCount; // Number of contracts
+        euint64 btcSize; // BTC position size (satoshi)
+        uint64 entryPrice; // Entry price (USD/BTC)
+        ebool isLong; // Long/Short identifier
+        uint256 openTimestamp; // Position opening timestamp
     }
 
     struct Balance {
-        euint64 usd; // USD 余额（密文）
+        euint64 usd; // USD balance (encrypted)
     }
 
     struct BalanceReveal {
-        uint64 amount; // 解密时的余额金额
-        uint256 timestamp; // 解密时间戳
+        uint64 amount; // Balance amount when decrypted
+        uint256 timestamp; // Decryption timestamp
     }
 
     struct DecryptionRequest {
-        address user; // 请求解密的用户
-        uint256 timestamp; // 请求时间戳
+        address user; // User requesting decryption
+        uint256 timestamp; // Request timestamp
     }
 
     // ============================
-    // 映射存储
+    // Mapping Storage
     // ============================
 
     mapping(uint256 => Position) private _positions;
@@ -68,11 +68,11 @@ contract PositionTrader is SepoliaConfig, Ownable {
     mapping(address => BalanceReveal) private _latestBalanceReveal;
     mapping(uint256 => DecryptionRequest) private _decryptionRequests;
     
-    // 排行榜相关存储
-    address[] private _revealedUsers; // 所有进行过余额解密的用户地址
+    // Leaderboard related storage
+    address[] private _revealedUsers; // All user addresses who have performed balance decryption
 
     // ============================
-    // 事件定义
+    // Event Definitions
     // ============================
 
     event UserRegistered(address indexed user);
@@ -83,7 +83,7 @@ contract PositionTrader is SepoliaConfig, Ownable {
     event PriceOracleUpdated(address indexed oldOracle, address indexed newOracle);
 
     // ============================
-    // 修饰符
+    // Modifiers
     // ============================
 
     modifier onlyRegistered() {
@@ -102,13 +102,13 @@ contract PositionTrader is SepoliaConfig, Ownable {
     }
 
     // ============================
-    // 构造函数
+    // Constructor
     // ============================
 
     /**
-     * @notice 构造函数
-     * @param _priceOracle 价格预言机地址
-     * @param _initialCashBase 用户注册时的初始虚拟资产数量 (USD)
+     * @notice Constructor
+     * @param _priceOracle Price oracle address
+     * @param _initialCashBase Initial virtual asset amount for user registration (USD)
      */
     constructor(address _priceOracle, uint64 _initialCashBase) Ownable(msg.sender) validAddress(_priceOracle) {
         require(_initialCashBase > 0, "Initial cash base must be greater than 0");
@@ -117,12 +117,12 @@ contract PositionTrader is SepoliaConfig, Ownable {
     }
 
     // ============================
-    // 用户管理
+    // User Management
     // ============================
 
     /**
-     * @notice 注册新用户并分配初始虚拟资产
-     * @dev 每个地址只能注册一次
+     * @notice Register new user and allocate initial virtual assets
+     * @dev Each address can only register once
      */
     function register() external {
         require(!isRegistered[msg.sender], "User already registered");
@@ -137,13 +137,13 @@ contract PositionTrader is SepoliaConfig, Ownable {
     }
 
     // ============================
-    // 查询功能
+    // Query Functions
     // ============================
 
     /**
-     * @notice 获取用户 USD 余额（密文）
-     * @param user 用户地址
-     * @return balance 用户的 USD 余额
+     * @notice Get user USD balance (encrypted)
+     * @param user User address
+     * @return balance User's USD balance
      */
     function getBalance(address user) external view returns (euint64 balance) {
         require(isRegistered[user], "User not registered");
@@ -151,13 +151,13 @@ contract PositionTrader is SepoliaConfig, Ownable {
     }
 
     /**
-     * @notice 获取特定持仓信息
-     * @param positionId 持仓 ID
-     * @return owner 持仓所有者地址
-     * @return contractCount 合约张数（密文）
-     * @return btcSize BTC 持仓大小（密文）
-     * @return entryPrice 开仓价格
-     * @return isLong 是否做多（密文）
+     * @notice Get specific position information
+     * @param positionId Position ID
+     * @return owner Position owner address
+     * @return contractCount Number of contracts (encrypted)
+     * @return btcSize BTC position size (encrypted)
+     * @return entryPrice Entry price
+     * @return isLong Whether long position (encrypted)
      */
     function getPosition(
         uint256 positionId
@@ -168,38 +168,38 @@ contract PositionTrader is SepoliaConfig, Ownable {
     }
 
     /**
-     * @notice 获取用户所有持仓 ID
-     * @param user 用户地址
-     * @return 持仓 ID 数组
+     * @notice Get all position IDs for a user
+     * @param user User address
+     * @return Array of position IDs
      */
     function getUserPositionIds(address user) external view returns (uint256[] memory) {
         return _userPositions[user];
     }
 
     /**
-     * @notice 获取当前 BTC 价格
-     * @return price 调整后的 BTC 价格
+     * @notice Get current BTC price
+     * @return price Adjusted BTC price
      */
     function getCurrentBtcPrice() external view returns (uint64 price) {
         return _getAdjustedBtcPrice();
     }
 
     /**
-     * @notice 请求解密自己的USD余额
-     * @dev 向FHEVM后端发送异步解密请求
-     * @return requestId 解密请求的ID
+     * @notice Request decryption of own USD balance
+     * @dev Send asynchronous decryption request to FHEVM backend
+     * @return requestId ID of the decryption request
      */
     function revealMyBalance() external onlyRegistered returns (uint256 requestId) {
         uint256 timestamp = block.timestamp;
 
-        // 准备要解密的密文数组
+        // Prepare ciphertext array for decryption
         bytes32[] memory cipherTexts = new bytes32[](1);
         cipherTexts[0] = FHE.toBytes32(_balances[msg.sender].usd);
 
-        // 发送解密请求
+        // Send decryption request
         requestId = FHE.requestDecryption(cipherTexts, this.callbackRevealBalance.selector);
 
-        // 记录解密请求
+        // Record decryption request
         _decryptionRequests[requestId] = DecryptionRequest({user: msg.sender, timestamp: timestamp});
 
         emit DecryptionRequested(msg.sender, requestId, timestamp);
@@ -208,20 +208,20 @@ contract PositionTrader is SepoliaConfig, Ownable {
     }
 
     /**
-     * @notice FHEVM后端解密余额后的回调函数
-     * @param requestId 解密请求ID
-     * @param decryptedAmount 解密后的余额数量
-     * @param signatures 用于验证回调真实性的签名数组
+     * @notice Callback function after FHEVM backend decrypts balance
+     * @param requestId Decryption request ID
+     * @param decryptedAmount Decrypted balance amount
+     * @param signatures Signature array for verifying callback authenticity
      */
     function callbackRevealBalance(uint256 requestId, uint64 decryptedAmount, bytes[] memory signatures) external {
-        // 验证回调的真实性，防止恶意调用
+        // Verify callback authenticity to prevent malicious calls
         FHE.checkSignatures(requestId, signatures);
 
-        // 获取解密请求信息
+        // Get decryption request information
         DecryptionRequest memory request = _decryptionRequests[requestId];
         require(request.user != address(0), "Invalid request ID");
 
-        // 如果用户首次进行余额解密，将其添加到排行榜用户列表
+        // If user performs balance decryption for the first time, add to leaderboard user list
         bool userExists = false;
         for (uint256 i = 0; i < _revealedUsers.length; i++) {
             if (_revealedUsers[i] == request.user) {
@@ -234,17 +234,17 @@ contract PositionTrader is SepoliaConfig, Ownable {
             _revealedUsers.push(request.user);
         }
 
-        // 更新用户的最新余额解密记录
+        // Update user's latest balance decryption record
         _latestBalanceReveal[request.user] = BalanceReveal({amount: decryptedAmount, timestamp: request.timestamp});
 
         emit BalanceRevealed(request.user, decryptedAmount, request.timestamp);
     }
 
     /**
-     * @notice 获取用户最新的余额解密记录
-     * @param user 用户地址
-     * @return amount 上次解密的余额数量
-     * @return timestamp 上次解密的时间戳
+     * @notice Get user's latest balance decryption record
+     * @param user User address
+     * @return amount Last decrypted balance amount
+     * @return timestamp Last decryption timestamp
      */
     function getLatestBalanceReveal(address user) external view returns (uint64 amount, uint256 timestamp) {
         require(isRegistered[user], "User not registered");
@@ -253,11 +253,11 @@ contract PositionTrader is SepoliaConfig, Ownable {
     }
 
     /**
-     * @notice 检查解密请求状态
-     * @param requestId 请求ID
-     * @return user 请求用户地址
-     * @return timestamp 请求时间戳
-     * @return isCompleted 是否已完成
+     * @notice Check decryption request status
+     * @param requestId Request ID
+     * @return user Requesting user address
+     * @return timestamp Request timestamp
+     * @return isCompleted Whether completed
      */
     function getDecryptionRequestStatus(
         uint256 requestId
@@ -268,41 +268,41 @@ contract PositionTrader is SepoliaConfig, Ownable {
 
 
     /**
-     * @notice 获取进行过余额解密的用户总数
-     * @return count 用户总数
+     * @notice Get total number of users who have performed balance decryption
+     * @return count Total number of users
      */
     function getRevealedUsersCount() external view returns (uint256 count) {
         return _revealedUsers.length;
     }
     /**
-     * @notice 获取所有已进行余额解密的用户地址
-     * @return users 用户地址数组
+     * @notice Get all user addresses who have performed balance decryption
+     * @return users Array of user addresses
      */
     function getRevealedUsers() external view returns (address[] memory users) {
         return _revealedUsers;
     }
 
     // ============================
-    // 交易功能
+    // Trading Functions
     // ============================
 
     /**
-     * @notice 开仓操作（1倍杠杆）
-     * @param _isLong 是否做多（密文）
-     * @param _usdAmount 投入的 USD 金额（密文）
-     * @param proof 零知识证明
-     * @return positionId 新建持仓的 ID
+     * @notice Open position operation (1x leverage)
+     * @param _isLong Whether long position (encrypted)
+     * @param _usdAmount USD amount to invest (encrypted)
+     * @param proof Zero-knowledge proof
+     * @return positionId ID of the newly created position
      */
     function openPosition(
         externalEbool _isLong,
         externalEuint64 _usdAmount,
         bytes calldata proof
     ) external onlyRegistered returns (uint256 positionId) {
-        // 解密输入参数
+        // Decrypt input parameters
         ebool isLong = FHE.fromExternal(_isLong, proof);
         euint64 usdAmount = FHE.fromExternal(_usdAmount, proof);
 
-        // 验证并扣除余额
+        // Verify and deduct balance
         euint64 currentBalance = _balances[msg.sender].usd;
         ebool sufficientBalance = FHE.ge(currentBalance, usdAmount);
 
@@ -315,24 +315,24 @@ contract PositionTrader is SepoliaConfig, Ownable {
 
 
 
-        // 获取当前价格并计算持仓参数
+        // Get current price and calculate position parameters
         uint64 currentPrice = _getAdjustedBtcPrice();
         euint64 btcSize = _calculateBtcSize(actualAmount, currentPrice);
-        euint64 contractCount = actualAmount; // 1 USD = 1 张合约
+        euint64 contractCount = actualAmount; // 1 USD = 1 contract
 
 
 
-        // 创建新持仓
+        // Create new position
         positionId = _createPosition(isLong, contractCount, btcSize, currentPrice);
 
         emit PositionOpened(msg.sender, positionId, currentPrice, block.timestamp);
     }
 
     /**
-     * @notice 平仓操作（部分或全部）
-     * @param positionId 持仓 ID
-     * @param _usdValue 平仓金额（密文）
-     * @param proof 零知识证明
+     * @notice Close position operation (partial or full)
+     * @param positionId Position ID
+     * @param _usdValue Close amount (encrypted)
+     * @param proof Zero-knowledge proof
      */
     function closePosition(
         uint256 positionId,
@@ -342,18 +342,18 @@ contract PositionTrader is SepoliaConfig, Ownable {
         euint64 usdValue = FHE.fromExternal(_usdValue, proof);
         Position storage pos = _positions[positionId];
 
-        // 验证平仓金额有效性
+        // Verify close amount validity
         ebool validClose = FHE.le(usdValue, pos.contractCount);
         euint64 actualAmount = FHE.select(validClose, usdValue, FHE.asEuint64(0));
 
-        // 计算盈亏和退还金额
+        // Calculate P&L and refund amount
         uint64 currentPrice = _getAdjustedBtcPrice();
         euint64 finalValue = _calculatePnL(pos, actualAmount, currentPrice);
 
-        // 更新持仓状态
+        // Update position status after close
         _updatePositionAfterClose(pos, actualAmount, currentPrice);
 
-        // 返还资金到用户余额
+        // Refund funds to user balance
         _balances[msg.sender].usd = FHE.add(_balances[msg.sender].usd, finalValue);
         _authorizeHandle(_balances[msg.sender].usd);
 
@@ -361,18 +361,18 @@ contract PositionTrader is SepoliaConfig, Ownable {
     }
 
     // ============================
-    // 内部辅助函数
+    // Internal Helper Functions
     // ============================
 
     /**
-     * @notice 计算 BTC 持仓大小
+     * @notice Calculate BTC position size
      */
     function _calculateBtcSize(euint64 usdAmount, uint64 price) private returns (euint64) {
         return FHE.div(FHE.mul(usdAmount, FHE.asEuint64(BTC_PRECISION)), price);
     }
 
     /**
-     * @notice 创建新持仓
+     * @notice Create new position
      */
     function _createPosition(
         ebool isLong,
@@ -393,14 +393,14 @@ contract PositionTrader is SepoliaConfig, Ownable {
 
         _userPositions[msg.sender].push(positionId);
 
-        // 授权访问权限
+        // Authorize access permissions
         _authorizeHandle(contractCount);
         _authorizeHandle(btcSize);
         _authorizeHandle(isLong);
     }
 
     /**
-     * @notice 计算盈亏
+     * @notice Calculate P&L
      */
     function _calculatePnL(Position memory pos, euint64 amount, uint64 currentPrice) private returns (euint64) {
         euint64 longPnL = _calculateLongPnL(amount, pos.entryPrice, currentPrice);
@@ -410,7 +410,7 @@ contract PositionTrader is SepoliaConfig, Ownable {
     }
 
     /**
-     * @notice 计算做多盈亏
+     * @notice Calculate long position P&L
      */
     function _calculateLongPnL(euint64 amount, uint64 entryPrice, uint64 currentPrice) private returns (euint64) {
         uint256 priceRatio = (uint256(currentPrice) * CALCULATION_PRECISION) / uint256(entryPrice);
@@ -419,11 +419,11 @@ contract PositionTrader is SepoliaConfig, Ownable {
     }
 
     /**
-     * @notice 计算做空盈亏
+     * @notice Calculate short position P&L
      */
     function _calculateShortPnL(euint64 amount, uint64 entryPrice, uint64 currentPrice) private returns (euint64) {
         if (currentPrice <= entryPrice) {
-            // 做空盈利
+            // Short position profit
             uint256 priceDiff = uint256(entryPrice - currentPrice);
             uint256 profitRatio = (priceDiff * CALCULATION_PRECISION) / uint256(entryPrice);
 
@@ -434,7 +434,7 @@ contract PositionTrader is SepoliaConfig, Ownable {
 
             return FHE.add(amount, profit);
         } else {
-            // 做空亏损
+            // Short position loss
             uint256 lossRatio = (uint256(entryPrice) * CALCULATION_PRECISION) / uint256(currentPrice);
 
             return FHE.div(FHE.mul(amount, FHE.asEuint64(uint64(lossRatio))), uint64(CALCULATION_PRECISION));
@@ -442,7 +442,7 @@ contract PositionTrader is SepoliaConfig, Ownable {
     }
 
     /**
-     * @notice 平仓后更新持仓状态
+     * @notice Update position status after close
      */
     function _updatePositionAfterClose(Position storage pos, euint64 closeAmount, uint64 currentPrice) private {
         euint64 closeBtcSize = FHE.div(FHE.mul(closeAmount, FHE.asEuint64(BTC_PRECISION)), pos.entryPrice);
@@ -455,7 +455,7 @@ contract PositionTrader is SepoliaConfig, Ownable {
     }
 
     /**
-     * @notice 获取调整后的 BTC 价格
+     * @notice Get adjusted BTC price
      */
     function _getAdjustedBtcPrice() private view returns (uint64) {
         uint256 price = IPriceOracle(priceOracleAddress).getLatestBtcPrice();
@@ -465,7 +465,7 @@ contract PositionTrader is SepoliaConfig, Ownable {
     }
 
     /**
-     * @notice 授权密文访问权限
+     * @notice Authorize encrypted text access permissions
      */
     function _authorizeHandle(euint64 handle) private {
         FHE.allowThis(handle);
@@ -473,7 +473,7 @@ contract PositionTrader is SepoliaConfig, Ownable {
     }
 
     /**
-     * @notice 授权布尔密文访问权限
+     * @notice Authorize boolean encrypted text access permissions
      */
     function _authorizeHandle(ebool handle) private {
         FHE.allowThis(handle);
@@ -481,12 +481,12 @@ contract PositionTrader is SepoliaConfig, Ownable {
     }
 
     // ============================
-    // 管理员功能
+    // Admin Functions
     // ============================
 
     /**
-     * @notice 更新价格预言机地址
-     * @param newOracle 新的预言机地址
+     * @notice Update price oracle address
+     * @param newOracle New oracle address
      */
     function updatePriceOracle(address newOracle) external onlyOwner validAddress(newOracle) {
         address oldOracle = priceOracleAddress;
