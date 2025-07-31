@@ -61,11 +61,48 @@ Hush is an innovative DeFi platform that leverages **Zama's FHEVM** (Fully Homom
 
 ## 📖 Usage
 
+### Interface Operation Flow
+
 1. **Connect Wallet**: Click "Connect Wallet" and select your Web3 wallet
 2. **Switch Network**: The app will prompt you to switch to Sepolia testnet
 3. **Register**: Complete the one-time user registration process
 4. **Trade**: Start trading BTC perpetual contracts with privacy protection
 5. **Monitor**: View your encrypted positions and participate in the leaderboard
+
+### Detailed Interface Guide
+
+#### 🔗 **Wallet Connection**
+- Click the "Connect Wallet" button in the top navigation
+- Select your preferred wallet (MetaMask recommended)
+- Approve the connection request in your wallet
+- The interface will automatically detect and switch to Sepolia testnet
+
+#### 📝 **User Registration**
+- After wallet connection, you'll see the registration panel
+- Enter your desired trading amount (in USD)
+- Click "Register" to create your encrypted account
+- Wait for transaction confirmation on Sepolia
+
+#### 💱 **Trading Operations**
+- **Open Position**: 
+  - Select "Long" or "Short" for BTC direction
+  - Enter the USD amount you want to trade
+  - Click "Open Position" and confirm the transaction
+- **Close Position**:
+  - View your active positions in the position panel
+  - Click "Close" on any position you want to exit
+  - Confirm the closing transaction
+
+#### 📊 **Position Management**
+- **Active Positions**: View all your open positions with real-time P&L
+- **Balance Reveal**: Click "Reveal Balance" to decrypt your current USD balance
+- **Position History**: Track your trading performance over time
+
+#### 🏆 **Leaderboard**
+- Navigate to the "Ranking" page to view the global leaderboard
+- See your rank among all traders while maintaining privacy
+- Monitor top performers and their encrypted balances
+
 
 ## 🔐 Privacy & Security
 
