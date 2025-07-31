@@ -119,6 +119,17 @@ Hush is an innovative DeFi platform that leverages **Zama's FHEVM** (Fully Homom
 - **RPC**: https://rpc.sepolia.org
 - **Explorer**: https://sepolia.etherscan.io
 
+## 📋 Deployed Contracts
+
+### Sepolia Testnet
+
+| Contract | Address | Explorer |
+|----------|---------|----------|
+| **PositionTrader** | `0xa56c109905d464b11de03400fec02e3e77e3a9b4` | [View on Etherscan](https://sepolia.etherscan.io/address/0xa56c109905d464b11de03400fec02e3e77e3a9b4) |
+| **PriceOracle** | `0x7cdc8EE2c834891E16C87c97c9933fB212d82144` | [View on Etherscan](https://sepolia.etherscan.io/address/0x7cdc8EE2c834891E16C87c97c9933fB212d82144) |
+
+> **Note**: These contracts are deployed on Sepolia testnet for testing purposes only. Do not use real funds.
+
 ## ⚠️ Disclaimer
 
 This is experimental software running on a testnet. Do not use real funds. This project is for educational and testing purposes only.
