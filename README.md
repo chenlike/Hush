@@ -13,51 +13,19 @@ Hush is an innovative DeFi platform that leverages **Zama's FHEVM** (Fully Homom
 
 
 
-## 🚀 Getting Started
 
-### Prerequisites
-- Node.js 22+ 
+## 📋 Deployed Contracts
 
-### Installation
+### Sepolia Testnet
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/your-username/hush.git
-   cd hush
-   ```
+| Contract | Address | Explorer |
+|----------|---------|----------|
+| **PositionTrader** | `0xa56c109905d464b11de03400fec02e3e77e3a9b4` | [View on Etherscan](https://sepolia.etherscan.io/address/0xa56c109905d464b11de03400fec02e3e77e3a9b4) |
+| **PriceOracle** | `0x7cdc8EE2c834891E16C87c97c9933fB212d82144` | [View on Etherscan](https://sepolia.etherscan.io/address/0x7cdc8EE2c834891E16C87c97c9933fB212d82144) |
 
-2. **Install dependencies**
-   ```bash
-   # Install frontend dependencies
-   cd dapp
-   npm install
+> **Note**: These contracts are deployed on Sepolia testnet for testing purposes only. 
 
-   # Install smart contract dependencies
-   cd ../solidity
-   npm install
-   ```
 
-3. **Configure environment**
-   ```bash
-   # Copy environment template
-   cp env.example .env
-   # Fill in your configuration
-   ```
-
-4. **Deploy contracts (optional)**
-   ```bash
-   cd solidity
-   npx hardhat deploy --network sepolia
-   ```
-
-5. **Start the development server**
-   ```bash
-   cd dapp
-   npm run dev
-   ```
-
-6. **Open your browser**
-   Navigate to `http://localhost:5173`
 
 ## 📖 Usage
 
@@ -104,6 +72,54 @@ Hush is an innovative DeFi platform that leverages **Zama's FHEVM** (Fully Homom
 - Monitor top performers and their encrypted balances
 
 
+
+## 🚀 How to run
+
+### Prerequisites
+- Node.js 22+ 
+
+### Installation
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/your-username/hush.git
+   cd hush
+   ```
+
+2. **Install dependencies**
+   ```bash
+   # Install frontend dependencies
+   cd dapp
+   npm install
+
+   # Install smart contract dependencies
+   cd ../solidity
+   npm install
+   ```
+
+3. **Configure environment**
+   ```bash
+   # Copy environment template
+   cp env.example .env
+   # Fill in your configuration
+   ```
+
+4. **Deploy contracts (optional)**
+   ```bash
+   cd solidity
+   npx hardhat deploy --network sepolia
+   ```
+
+5. **Start the development server**
+   ```bash
+   cd dapp
+   npm run dev
+   ```
+
+6. **Open your browser**
+   Navigate to `http://localhost:5173`
+
+
 ## 🔐 Privacy & Security
 
 - **End-to-End Encryption**: All sensitive data is encrypted using FHE
@@ -119,16 +135,6 @@ Hush is an innovative DeFi platform that leverages **Zama's FHEVM** (Fully Homom
 - **RPC**: https://rpc.sepolia.org
 - **Explorer**: https://sepolia.etherscan.io
 
-## 📋 Deployed Contracts
-
-### Sepolia Testnet
-
-| Contract | Address | Explorer |
-|----------|---------|----------|
-| **PositionTrader** | `0xa56c109905d464b11de03400fec02e3e77e3a9b4` | [View on Etherscan](https://sepolia.etherscan.io/address/0xa56c109905d464b11de03400fec02e3e77e3a9b4) |
-| **PriceOracle** | `0x7cdc8EE2c834891E16C87c97c9933fB212d82144` | [View on Etherscan](https://sepolia.etherscan.io/address/0x7cdc8EE2c834891E16C87c97c9933fB212d82144) |
-
-> **Note**: These contracts are deployed on Sepolia testnet for testing purposes only. Do not use real funds.
 
 ## ⚠️ Disclaimer
 
