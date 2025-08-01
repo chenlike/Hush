@@ -665,20 +665,17 @@ export const useTradingContractActions = () => {
             const [amount, timestamp] = balanceReveal;
             const amountNum = Number(amount);
             const timestampNum = Number(timestamp);
-            
-            if (amountNum > 0) {
-              const initialAmount = 100000; // Initial balance
-              const profit = amountNum - initialAmount;
-              const profitPercentage = ((profit / initialAmount) * 100);
+            const initialAmount = 100000; // Initial balance
+            const profit = amountNum - initialAmount;
+            const profitPercentage = ((profit / initialAmount) * 100);
 
-              return {
-                user: userAddress,
-                amount: amountNum,
-                timestamp: timestampNum,
-                profit,
-                profitPercentage
-              };
-            }
+            return {
+              user: userAddress,
+              amount: amountNum,
+              timestamp: timestampNum,
+              profit,
+              profitPercentage
+            };
           }
           return null;
         } catch (error) {
